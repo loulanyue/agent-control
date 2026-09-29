@@ -1,0 +1,41 @@
+name: 💡 Feature Request / RFC
+description: Suggest an idea, enhancement, or architectural proposal for Agent Control
+title: "[Feature]: "
+labels: ["enhancement", "proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        We love new ideas and community contributions! Please share your thoughts on how Agent Control can be improved.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Use Case
+      description: Is your feature request related to a specific problem or friction in your workflow?
+      placeholder: "A clear description of what the problem is, e.g. I am always frustrated when..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution / Feature Description
+      description: What would you like to see implemented?
+      placeholder: "A detailed description of the desired behavior, API design, or MCP tool addition."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any alternative solutions or workarounds you've considered?
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Willingness to Contribute
+      options:
+        - label: I am willing to submit a Pull Request for this feature.
+          required: false

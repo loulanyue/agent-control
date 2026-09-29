@@ -1,0 +1,73 @@
+name: 🐛 Bug Report
+description: Report a reproducible bug or unexpected behavior in Agent Control
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please provide as much context as possible to help us investigate and resolve it quickly.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Describe what happened and what you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this behavior?
+      placeholder: |
+        1. Start Agent Control via `...`
+        2. Call API / MCP tool `...`
+        3. See error `...`
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs & Error Output
+      description: Please paste any relevant stack traces or console output.
+      render: shell
+
+  - type: dropdown
+    id: database
+    attributes:
+      label: Database Backend
+      description: Which database are you connecting to?
+      options:
+        - MySQL 8.0+
+        - SQLite (Local)
+        - PostgreSQL
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Deployment Environment
+      description: How are you running Agent Control?
+      options:
+        - Local Virtualenv (Python 3.10+)
+        - Docker Compose
+        - MCP Client (Claude Desktop / Cursor)
+        - Kubernetes / Cloud Container
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Checklist
+      options:
+        - label: I have checked existing issues to ensure this is not a duplicate.
+          required: true
+        - label: I am using the latest version of Agent Control.
+          required: false

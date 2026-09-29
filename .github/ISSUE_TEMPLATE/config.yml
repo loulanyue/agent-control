@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 💬 GitHub Discussions
+    url: https://github.com/loulanyue/agent-control/discussions
+    about: Ask general questions, discuss ideas, and share your Agent use cases.
+  - name: 📖 Documentation
+    url: https://github.com/loulanyue/agent-control#readme
+    about: Read the official Agent Control guides, API docs, and MCP setup.
