@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.antigravity.talentcrawler</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/youfanyu/Desktop/workspace/tpm/agent_control/scripts/cron_talent_crawler.sh</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>17</integer>
+        <key>Minute</key>
+        <integer>25</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/Users/youfanyu/Desktop/workspace/tpm/agent_control/logs/launchd_crawler.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/youfanyu/Desktop/workspace/tpm/agent_control/logs/launchd_crawler_err.log</string>
+</dict>
+</plist>

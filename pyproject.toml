@@ -1,0 +1,88 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-control"
+version = "1.0.0"
+description = "🚀 High-performance AI Agent Control Plane, Task Orchestration & Model Context Protocol (MCP) Platform"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "agent-control contributors", email = "youfy@longjitech.com" }
+]
+keywords = [
+    "ai-agent",
+    "agent-orchestration",
+    "control-plane",
+    "mcp",
+    "model-context-protocol",
+    "fastapi",
+    "workflow-engine",
+    "dag",
+    "crawler"
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.28.0",
+    "pydantic>=2.6.0",
+    "sqlalchemy>=2.0.28",
+    "pymysql>=1.1.0",
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.0",
+    "python-multipart>=0.0.9",
+    "ulid-py>=1.1.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.27.0",
+    "ruff>=0.3.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/loulanyue/agent-control"
+Repository = "https://github.com/loulanyue/agent-control"
+Documentation = "https://github.com/loulanyue/agent-control#readme"
+"Bug Tracker" = "https://github.com/loulanyue/agent-control/issues"
+
+[project.scripts]
+agent-control = "main:app"
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-q"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = [
+    "venv",
+    ".venv",
+    "logs",
+    "node_modules",
+    "build",
+    "dist"
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+ignore = ["E501", "UP007", "F401"]

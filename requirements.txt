@@ -1,0 +1,16 @@
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+sqlalchemy[asyncio]>=2.0.30
+aiomysql>=0.2.0
+pymysql>=1.1.0
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+python-dotenv>=1.0.1
+ulid-py>=1.1.0
+python-multipart>=0.0.9
+requests>=2.31.0
+aiohttp>=3.9.5
+cryptography>=42.0.0
+pytest>=8.2.0
+pytest-asyncio>=0.23.7
+httpx>=0.27.0
