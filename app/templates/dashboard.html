@@ -93,9 +93,16 @@
           <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
           MySQL 13306 已连接
         </span>
+        <button
+          @click="openMcpModal"
+          class="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-mono text-[10px] bg-indigo-500/10 hover:bg-indigo-500/20 px-2 py-0.5 rounded border border-indigo-500/20 transition cursor-pointer"
+          title="点击查看 MCP Server 10 大工具与 Claude/Cursor 配置">
+          <i class="fa-solid fa-bolt text-amber-400"></i>
+          MCP 10 Tools
+        </button>
         <a href="/docs" target="_blank" class="hover:text-indigo-400 flex items-center gap-1">
           <i class="fa-solid fa-book-open"></i>
-          API 文档
+          API
         </a>
       </div>
     </aside>
@@ -176,6 +183,15 @@
             <span>[[ qccCrawlState.isRunning ? '数据采集中...' : '启动数据抓取' ]]</span>
           </button>
 
+          <!-- 任务与工作流专属：派发新任务 -->
+          <button
+            v-if="currentMenuId === 'tasks' || currentMenuId === 'graphs'"
+            @click="openDispatchModal"
+            class="px-3.5 py-1.5 bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 hover:from-indigo-500 hover:to-violet-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-indigo-600/30 border border-indigo-400/30 transition-all cursor-pointer">
+            <i class="fa-solid fa-paper-plane text-indigo-200"></i>
+            <span>派发新任务</span>
+          </button>
+
           <!-- 子标签切换 (若有多个子表) -->
           <div v-if="currentMenu.subTabs && currentMenu.subTabs.length > 1" class="flex bg-slate-800/80 p-1 rounded-lg border border-slate-700">
             <button
@@ -198,6 +214,175 @@
           </button>
         </div>
       </header>
+
+      <!-- 工作流编排 (DAG) 专属：动态拓扑全景看板与流水线交互面板 -->
+      <section v-if="currentMenuId === 'graphs'" class="p-5 bg-gradient-to-r from-slate-900 via-slate-900/95 to-indigo-950/40 border-b border-slate-800/80 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div class="flex items-center space-x-3.5">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-violet-600 to-cyan-500 flex items-center justify-center text-white text-lg font-bold shadow-md shadow-indigo-500/20">
+              <i class="fa-solid fa-diagram-project"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <h2 class="text-sm font-bold text-white tracking-wide">Agent 智能体调度与 DAG 工作流 · 实时执行拓扑</h2>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <i class="fa-solid fa-circle-check text-[9px] mr-1"></i>状态正常
+                </span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                  原生 MCP Server 集成
+                </span>
+              </div>
+              <p class="text-xs text-slate-400 mt-0.5">
+                基于 FastAPI 控制面与 Model Context Protocol (MCP) 标准，提供可视化 DAG 节点拓扑、依赖反解与全生命周期追踪。
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button
+              @click="openDispatchModal"
+              class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-indigo-600/30 transition">
+              <i class="fa-solid fa-plus text-xs"></i>
+              创建任务
+            </button>
+            <button
+              @click="openMcpModal"
+              class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition">
+              <i class="fa-solid fa-code text-indigo-400"></i>
+              MCP 客户端配置
+            </button>
+          </div>
+        </div>
+
+        <!-- 交互式拓扑流水线 (Node-Link DAG Flow) -->
+        <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-4 overflow-x-auto">
+          <div class="min-w-[900px] flex items-center justify-between gap-3 relative py-2">
+            
+            <!-- 节点 1: 采集与感知 -->
+            <div class="flex-1 bg-slate-900/90 border border-indigo-500/30 hover:border-indigo-400 rounded-xl p-3.5 shadow-lg relative group transition-all">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[10px] font-mono text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">Stage 01</span>
+                <span class="flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Active
+                </span>
+              </div>
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-indigo-600/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30 text-sm">
+                  <i class="fa-solid fa-spider"></i>
+                </div>
+                <div>
+                  <h4 class="text-xs font-bold text-white group-hover:text-indigo-300 transition">CrawlerAgent</h4>
+                  <p class="text-[11px] text-slate-400">数据采集与多源感知</p>
+                </div>
+              </div>
+              <div class="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400 font-mono">
+                <span>触发: 定时 / MCP</span>
+                <span class="text-indigo-300">延迟: ~0.4s</span>
+              </div>
+            </div>
+
+            <!-- 连接连接线 1 -->
+            <div class="flex flex-col items-center justify-center px-1 flex-shrink-0 text-slate-600">
+              <div class="text-[9px] font-mono text-slate-400 mb-1">Payload Stream</div>
+              <div class="flex items-center gap-1">
+                <span class="w-8 h-[2px] bg-gradient-to-r from-indigo-500 to-cyan-500 animate-pulse"></span>
+                <i class="fa-solid fa-chevron-right text-[10px] text-cyan-400"></i>
+              </div>
+            </div>
+
+            <!-- 节点 2: 清洗与脱敏 -->
+            <div class="flex-1 bg-slate-900/90 border border-cyan-500/30 hover:border-cyan-400 rounded-xl p-3.5 shadow-lg relative group transition-all">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">Stage 02</span>
+                <span class="flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  Verified
+                </span>
+              </div>
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-cyan-600/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30 text-sm">
+                  <i class="fa-solid fa-filter"></i>
+                </div>
+                <div>
+                  <h4 class="text-xs font-bold text-white group-hover:text-cyan-300 transition">CleanseFilter</h4>
+                  <p class="text-[11px] text-slate-400">规约校验与隐私脱敏</p>
+                </div>
+              </div>
+              <div class="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400 font-mono">
+                <span>规则: 14 条生效</span>
+                <span class="text-cyan-300">去重: 自动幂等</span>
+              </div>
+            </div>
+
+            <!-- 连接连接线 2 -->
+            <div class="flex flex-col items-center justify-center px-1 flex-shrink-0 text-slate-600">
+              <div class="text-[9px] font-mono text-slate-400 mb-1">Clean DTO</div>
+              <div class="flex items-center gap-1">
+                <span class="w-8 h-[2px] bg-gradient-to-r from-cyan-500 to-purple-500 animate-pulse"></span>
+                <i class="fa-solid fa-chevron-right text-[10px] text-purple-400"></i>
+              </div>
+            </div>
+
+            <!-- 节点 3: 结构化入库 -->
+            <div class="flex-1 bg-slate-900/90 border border-purple-500/30 hover:border-purple-400 rounded-xl p-3.5 shadow-lg relative group transition-all">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[10px] font-mono text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">Stage 03</span>
+                <span class="flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  Persisted
+                </span>
+              </div>
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-purple-600/20 text-purple-400 flex items-center justify-center border border-purple-500/30 text-sm">
+                  <i class="fa-solid fa-database"></i>
+                </div>
+                <div>
+                  <h4 class="text-xs font-bold text-white group-hover:text-purple-300 transition">StoragePipeline</h4>
+                  <p class="text-[11px] text-slate-400">多维数据模型持久化</p>
+                </div>
+              </div>
+              <div class="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400 font-mono">
+                <span>MySQL: 40 数据表</span>
+                <span class="text-purple-300">事务: ACID 提交</span>
+              </div>
+            </div>
+
+            <!-- 连接连接线 3 -->
+            <div class="flex flex-col items-center justify-center px-1 flex-shrink-0 text-slate-600">
+              <div class="text-[9px] font-mono text-slate-400 mb-1">Event Dispatch</div>
+              <div class="flex items-center gap-1">
+                <span class="w-8 h-[2px] bg-gradient-to-r from-purple-500 to-amber-500 animate-pulse"></span>
+                <i class="fa-solid fa-chevron-right text-[10px] text-amber-400"></i>
+              </div>
+            </div>
+
+            <!-- 节点 4: 事件通知与下发 -->
+            <div class="flex-1 bg-slate-900/90 border border-amber-500/30 hover:border-amber-400 rounded-xl p-3.5 shadow-lg relative group transition-all">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[10px] font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">Stage 04</span>
+                <span class="flex items-center gap-1 text-[10px] text-amber-400 font-medium">
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                  Ready
+                </span>
+              </div>
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-amber-600/20 text-amber-400 flex items-center justify-center border border-amber-500/30 text-sm">
+                  <i class="fa-solid fa-bell"></i>
+                </div>
+                <div>
+                  <h4 class="text-xs font-bold text-white group-hover:text-amber-300 transition">NotifierAgent</h4>
+                  <p class="text-[11px] text-slate-400">下游事件分发与提醒</p>
+                </div>
+              </div>
+              <div class="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400 font-mono">
+                <span>Webhook / SSE</span>
+                <span class="text-amber-300">状态: 0 告警</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
 
       <!-- 岗位能力专属：多企业招聘全景与公司维度标签卡片 -->
       <section v-if="currentMenuId === 'jobs'" class="p-4 bg-gradient-to-r from-slate-900 via-slate-900/95 to-indigo-950/30 border-b border-slate-800/80 space-y-3">
@@ -1343,6 +1528,147 @@
       </div>
     </div>
 
+    <!-- 任务快捷派发弹窗 (Dispatch Task Modal) -->
+    <div v-if="dispatchModalVisible" @click.self="dispatchModalVisible = false" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer">
+      <div @click.stop class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150 cursor-default">
+        <!-- Header -->
+        <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-800/60">
+          <div class="flex items-center space-x-2.5">
+            <div class="w-8 h-8 rounded-lg bg-indigo-600/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
+              <i class="fa-solid fa-paper-plane text-sm"></i>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-white">派发智能体任务 (Dispatch Task)</h3>
+              <p class="text-[11px] text-slate-400">将自治任务加入 Agent Control 调度队列</p>
+            </div>
+          </div>
+          <button @click="dispatchModalVisible = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 text-xs transition">
+            <i class="fa-solid fa-xmark text-sm"></i>
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="p-5 space-y-4 text-xs">
+          <div>
+            <label class="block text-slate-300 font-medium mb-1.5">任务标题 <span class="text-rose-400">*</span></label>
+            <input
+              v-model="dispatchForm.title"
+              type="text"
+              placeholder="例如：抓取最新公示数据 / 爬取半导体岗位画像..."
+              class="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" />
+          </div>
+
+          <div>
+            <label class="block text-slate-300 font-medium mb-1.5">任务执行目标 / Objective</label>
+            <textarea
+              v-model="dispatchForm.objective"
+              rows="3"
+              placeholder="详细描述任务要求、期望输出的数据格式或执行约束..."
+              class="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"></textarea>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-slate-300 font-medium mb-1.5">优先级</label>
+              <select
+                v-model="dispatchForm.priority"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                <option value="normal">Normal (普通)</option>
+                <option value="high">High (优先)</option>
+                <option value="critical">Critical (紧急)</option>
+                <option value="low">Low (低优先级)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-slate-300 font-medium mb-1.5">来源标识</label>
+              <input
+                v-model="dispatchForm.source_type"
+                type="text"
+                placeholder="dashboard"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="px-5 py-3 border-t border-slate-800 bg-slate-950/60 flex items-center justify-end space-x-2.5">
+          <button @click="dispatchModalVisible = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition">
+            取消
+          </button>
+          <button
+            @click="submitDispatchTask"
+            :disabled="dispatching"
+            class="px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-indigo-600/30 transition disabled:opacity-60">
+            <i :class="dispatching ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-check'"></i>
+            <span>[[ dispatching ? '正在派发...' : '确认派发' ]]</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MCP 协议配置弹窗 (MCP Server Info Modal) -->
+    <div v-if="mcpModalVisible" @click.self="mcpModalVisible = false" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer">
+      <div @click.stop class="bg-slate-900 border border-slate-700 rounded-2xl max-w-xl w-full shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150 cursor-default">
+        <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-800/60">
+          <div class="flex items-center space-x-2.5">
+            <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
+              <i class="fa-solid fa-bolt text-sm"></i>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-white">Agent Control MCP Server (10 Tools)</h3>
+              <p class="text-[11px] text-slate-400">Model Context Protocol 客户端接入指南</p>
+            </div>
+          </div>
+          <button @click="mcpModalVisible = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 text-xs transition">
+            <i class="fa-solid fa-xmark text-sm"></i>
+          </button>
+        </div>
+        <div class="p-5 space-y-4 text-xs">
+          <p class="text-slate-300">
+            Agent Control 内置了高性能原生 MCP Server (<code class="text-indigo-400">mcp_server.py</code>)，支持 Claude Desktop、Claude Code、Cursor 与任意 MCP Client 直连调用控制面。
+          </p>
+          <div>
+            <label class="block text-slate-400 font-semibold mb-1">Claude Desktop 配置示例 (<code class="text-amber-400">claude_desktop_config.json</code>):</label>
+            <pre class="bg-slate-950 p-3 rounded-lg border border-slate-800 text-indigo-300 font-mono text-[11px] overflow-x-auto select-all">
+{
+  "mcpServers": {
+    "agent-control": {
+      "command": "python3",
+      "args": ["/Users/youfanyu/Desktop/workspace/tpm/agent-control/mcp_server.py"],
+      "env": {
+        "DB_HOST": "127.0.0.1",
+        "DB_PORT": "13306",
+        "DB_USER": "root",
+        "DB_NAME": "agent_control"
+      }
+    }
+  }
+}</pre>
+          </div>
+          <div class="bg-slate-800/60 p-3 rounded-lg border border-slate-700/60 space-y-1">
+            <div class="font-bold text-slate-200">包含的 10 大标准化工具:</div>
+            <div class="grid grid-cols-2 gap-2 text-slate-400 font-mono text-[11px]">
+              <div>• control_list_agents</div>
+              <div>• control_list_tasks</div>
+              <div>• control_dispatch_task</div>
+              <div>• control_get_task_status</div>
+              <div>• control_list_graphs</div>
+              <div>• control_get_system_metrics</div>
+              <div>• mysql_read_query</div>
+              <div>• mysql_list_tables</div>
+              <div>• mysql_describe_table</div>
+              <div>• mysql_execute_statement</div>
+            </div>
+          </div>
+        </div>
+        <div class="px-5 py-3 border-t border-slate-800 bg-slate-950/60 flex items-center justify-end">
+          <button @click="mcpModalVisible = false" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition">
+            我知道了
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 数据采集配置与确认弹窗 (Crawl Modal) -->
     <div v-if="crawlModalVisible" @click.self="crawlModalVisible = false" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer">
       <div @click.stop class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150 cursor-default">
@@ -2097,6 +2423,58 @@
           } finally {
             companyCrawlState.value.isRunning = false;
           }
+        };
+
+        // 智能体任务派发与 MCP 协议弹窗交互状态
+        const dispatchModalVisible = ref(false);
+        const dispatching = ref(false);
+        const dispatchForm = ref({
+          title: '',
+          objective: '',
+          priority: 'normal',
+          source_type: 'dashboard'
+        });
+
+        const openDispatchModal = () => {
+          dispatchForm.value = {
+            title: '',
+            objective: '',
+            priority: 'normal',
+            source_type: 'dashboard'
+          };
+          dispatchModalVisible.value = true;
+        };
+
+        const submitDispatchTask = async () => {
+          if (!dispatchForm.value.title.trim()) {
+            alert('请输入任务标题');
+            return;
+          }
+          dispatching.value = true;
+          try {
+            const resp = await fetch('/api/v1/tasks', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(dispatchForm.value)
+            });
+            if (resp.ok) {
+              dispatchModalVisible.value = false;
+              alert('🎉 任务派发成功！已加入待执行调度队列。');
+              loadData();
+            } else {
+              const err = await resp.json();
+              alert('派发失败: ' + (err.detail || '未知错误'));
+            }
+          } catch (e) {
+            alert('网络异常: ' + e.message);
+          } finally {
+            dispatching.value = false;
+          }
+        };
+
+        const mcpModalVisible = ref(false);
+        const openMcpModal = () => {
+          mcpModalVisible.value = true;
         };
 
         // 企查查中标公告抓取状态与方法
@@ -4716,7 +5094,14 @@
           copyQccScript,
           copyQcc2026Script,
           copyQccProvinceScript,
-          importQccPastedData
+          importQccPastedData,
+          dispatchModalVisible,
+          dispatching,
+          dispatchForm,
+          openDispatchModal,
+          submitDispatchTask,
+          mcpModalVisible,
+          openMcpModal
         };
       }
     }).mount('#app');

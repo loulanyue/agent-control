@@ -65,9 +65,13 @@ Documentation = "https://github.com/loulanyue/agent-control#readme"
 [project.scripts]
 agent-control = "main:app"
 
+[tool.setuptools.packages.find]
+include = ["app*", "agent_control_sdk*", "db*"]
+
 [tool.pytest.ini_options]
 minversion = "7.0"
 addopts = "-q"
+pythonpath = ["."]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 

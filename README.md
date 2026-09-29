@@ -117,9 +117,62 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 ---
 
-## 🔌 Model Context Protocol (MCP) Integration
+## 🐍 Python SDK (`agent-control-sdk`)
 
-Agent Control includes a native MCP server (`mcp_server.py`) enabling LLMs to query database status, inspect tables, and execute tasks directly.
+Agent Control includes an official, fully-typed Python SDK for programmatic task dispatching, agent fleet management, and DAG monitoring:
+
+```bash
+# Install directly from the repository
+pip install -e .
+```
+
+### SDK Quickstart
+
+```python
+from agent_control_sdk import AgentControlClient, TaskPriority
+
+# 1. Connect to the Control Plane
+client = AgentControlClient(base_url="http://localhost:8000")
+
+# 2. Inspect cluster metrics
+metrics = client.system.metrics()
+print(f"Agents: {metrics.total_agents} | Tasks: {metrics.total_tasks}")
+
+# 3. List online agents
+agents = client.agents.list(status="online")
+for agent in agents["items"]:
+    print(f"Agent: {agent.name} ({agent.agent_type})")
+
+# 4. Dispatch an autonomous task
+task = client.tasks.dispatch(
+    title="Extract semiconductor job profiles",
+    objective="Crawl top 20 chip design companies and normalize skill requirements",
+    priority=TaskPriority.HIGH
+)
+print(f"Dispatched Task #{task.id} (Public ID: {task.public_id})")
+
+# 5. Inspect DAG workflows
+graphs = client.graphs.list()
+print(f"Active DAG definitions: {graphs['total']}")
+```
+
+---
+
+## 🔌 Model Context Protocol (MCP) Integration (10 Built-in Tools)
+
+Agent Control includes a native Model Context Protocol (MCP) server (`mcp_server.py`) enabling LLMs (Claude Desktop, Cursor, Claude Code) to orchestrate tasks, inspect workflows, and query database state.
+
+### 10 Standardized MCP Tools:
+- **`control_list_agents`**: Query active AI agents, status, and capabilities.
+- **`control_list_tasks`**: Query task execution queue by status, priority, and keyword.
+- **`control_dispatch_task`**: Dispatch a new autonomous task into the control plane queue.
+- **`control_get_task_status`**: Retrieve execution logs, attempts, and artifacts of a task.
+- **`control_list_graphs`**: List DAG workflow pipelines and orchestration topologies.
+- **`control_get_system_metrics`**: Get real-time cluster health and operational stats.
+- **`mysql_read_query`**: Safe read queries (SELECT / SHOW / DESCRIBE) against backend data.
+- **`mysql_list_tables`**: List all 40 system and business data tables.
+- **`mysql_describe_table`**: Inspect column definitions and indices of any table.
+- **`mysql_execute_statement`**: Execute transactional DML statements.
 
 ### Claude Desktop Configuration
 Add the following to your `claude_desktop_config.json`:
