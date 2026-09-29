@@ -192,6 +192,16 @@ Explore all endpoints with interactive testing at `http://localhost:8000/docs`.
 
 ---
 
+## 🌐 Ecosystem & Integrations
+
+Agent Control is designed to seamlessly interoperate with the broader agent and developer tooling ecosystem:
+
+- 🏄 **[Dream XI AI](https://github.com/loulanyue/dream-xi-ai)** (460+ ⭐): Multi-Agent Collaboration Platform inspired by football dream team formations. Uses Agent Control as its distributed control plane and scheduling engine.
+- 📚 **[Awesome Claude Notes](https://github.com/loulanyue/awesome-claude-notes)** (270+ ⭐): Community-maintained repository of reusable AI coding agents, skills, and workflows with out-of-the-box MCP integration.
+- 🎯 **[Spec Kit ZH](https://github.com/loulanyue/spec-kit-zh)** (330+ ⭐): Spec-driven development toolkit for Claude Code, Cursor, and Codex agents.
+
+---
+
 ## 🤝 Contributing
 
 Contributions, bug reports, and feature requests are very welcome! Please check our [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md).
