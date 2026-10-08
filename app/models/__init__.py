@@ -12,7 +12,7 @@ from app.models.extensions import (
     PartTimeOpportunity, PartTimeScanRun,
     JobPosition, JobRequirement,
     SoftExamKnowledgePoint, SelfProjectIteration,
-    BitcoinMiningRun
+    BitcoinMiningRun, TwitterFrontierTechPost
 )
 
 __all__ = [
@@ -26,5 +26,5 @@ __all__ = [
     "PartTimeOpportunity", "PartTimeScanRun",
     "JobPosition", "JobRequirement",
     "SoftExamKnowledgePoint", "SelfProjectIteration",
-    "BitcoinMiningRun"
+    "BitcoinMiningRun", "TwitterFrontierTechPost"
 ]

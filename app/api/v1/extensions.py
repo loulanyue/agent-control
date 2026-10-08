@@ -7,7 +7,7 @@ from typing import Optional, List, Any, Dict
 from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, or_, cast, String
+from sqlalchemy import desc, or_, cast, String, case, asc, func
 
 from db.session import get_db
 from app.models.extensions import (
@@ -19,7 +19,8 @@ from app.models.extensions import (
     SoftExamKnowledgePoint, SelfProjectIteration,
     BitcoinMiningRun,
     AgentArchitecturePosition, AgentArchitectureRequirement,
-    QccCompanyBid, QccBidCrawlRun
+    QccCompanyBid, QccBidCrawlRun,
+    TwitterFrontierTechPost
 )
 from app.schemas.pagination import PageResult, paginate_query
 
@@ -36,6 +37,9 @@ def list_talent_notices(
     publish_date: Optional[str] = Query(None, description="公示发布日期，格式 YYYY-MM-DD 或 YYYY-MM"),
     category: Optional[str] = Query(None, description="人才分类/类别（模糊搜索，如：E类、D类、博士学位）"),
     keyword: Optional[str] = Query(None, description="申报人/标题/单位/受理部门关键词"),
+    sort_by: Optional[str] = Query("publish_date", description="排序字段: publish_date / birth_date"),
+    order: Optional[str] = Query("desc", description="排序顺序: desc / asc"),
+    birth_year: Optional[str] = Query(None, description="出生年份或年代过滤，如 1997, 00后, 95后, 90后, 85后, 80后, 70后, 60后"),
     db: Session = Depends(get_db)
 ):
     query = db.query(HzTalentNotice)
@@ -51,6 +55,32 @@ def list_talent_notices(
         import re
         cat_pattern = re.sub(r'([a-zA-Z])\s*类', r'\1%类', category.strip())
         query = query.filter(HzTalentNotice.apply_type.ilike(f"%{cat_pattern}%"))
+    if isinstance(birth_year, str) and birth_year.strip():
+        import re
+        by = birth_year.strip()
+        if by in ("00后", "00后 (2000+)"):
+            query = query.filter(HzTalentNotice.birth_date >= "2000年", HzTalentNotice.birth_date.op("REGEXP")("^[0-9]{4}年"))
+        elif by in ("95后", "95后 (1995-1999)"):
+            query = query.filter(HzTalentNotice.birth_date >= "1995年", HzTalentNotice.birth_date < "2000年")
+        elif by in ("90后", "90后 (1990-1999)"):
+            query = query.filter(HzTalentNotice.birth_date >= "1990年", HzTalentNotice.birth_date < "2000年")
+        elif by in ("90-94", "90-94年", "90-94年 (1990-1994)"):
+            query = query.filter(HzTalentNotice.birth_date >= "1990年", HzTalentNotice.birth_date < "1995年")
+        elif by in ("85后", "85-89", "85-89年", "85-89年 (1985-1989)"):
+            query = query.filter(HzTalentNotice.birth_date >= "1985年", HzTalentNotice.birth_date < "1990年")
+        elif by in ("80后", "80后 (1980-1989)"):
+            query = query.filter(HzTalentNotice.birth_date >= "1980年", HzTalentNotice.birth_date < "1990年")
+        elif by in ("80-84", "80-84年", "80-84年 (1980-1984)"):
+            query = query.filter(HzTalentNotice.birth_date >= "1980年", HzTalentNotice.birth_date < "1985年")
+        elif by in ("70后", "70后 (1970-1979)"):
+            query = query.filter(HzTalentNotice.birth_date >= "1970年", HzTalentNotice.birth_date < "1980年")
+        elif by in ("60后", "60后及更早", "60后及更早 (<1970)"):
+            query = query.filter(HzTalentNotice.birth_date < "1970年", HzTalentNotice.birth_date.op("REGEXP")("^[0-9]{4}年"))
+        else:
+            m = re.match(r"^(\d{4})", by)
+            if m:
+                query = query.filter(HzTalentNotice.birth_date.like(f"{m.group(1)}%"))
+
     if isinstance(keyword, str) and keyword.strip():
         import re
         kw_raw = keyword.strip()
@@ -65,7 +95,21 @@ def list_talent_notices(
                 HzTalentNotice.apply_type.ilike(kw)
             )
         )
-    query = query.order_by(desc(HzTalentNotice.publish_date), desc(HzTalentNotice.id))
+
+    # 排序处理: 支持按 publish_date 或 birth_date 倒序/正序
+    is_asc = (order or "").strip().lower() == "asc"
+    if (sort_by or "").strip().lower() == "birth_date":
+        # 确保有具体YYYY年MM月格式的有效日期优先排在前面，无效或'多批次'排在最后
+        valid_birth_case = case((HzTalentNotice.birth_date.op("REGEXP")("^[0-9]{4}年"), 0), else_=1).asc()
+        if is_asc:
+            query = query.order_by(valid_birth_case, HzTalentNotice.birth_date.asc(), desc(HzTalentNotice.id))
+        else:
+            query = query.order_by(valid_birth_case, desc(HzTalentNotice.birth_date), desc(HzTalentNotice.id))
+    else:
+        if is_asc:
+            query = query.order_by(HzTalentNotice.publish_date.asc(), desc(HzTalentNotice.id))
+        else:
+            query = query.order_by(desc(HzTalentNotice.publish_date), desc(HzTalentNotice.id))
 
     def serialize(n: HzTalentNotice):
         return {
@@ -267,7 +311,213 @@ def get_talent_date_stats(
         "timeline": timeline
     }
 
+@router.get("/talent-notices/birth-year-stats")
+def get_talent_birth_year_stats(db: Session = Depends(get_db)):
+    """
+    按申报人出生年份/年代统计人才分布，包括：
+    - timeline: 1957~2003年逐年分布（总人数、男、女、B/C/D/E类分布）
+    - decade_summary: 00后、95后、90-94、85-89、80-84、70后、60后及更早等年代细分统计
+    - broad_summary: 00后、90后、80后、70后、60后宏观代际比例
+    - kpis: 顶峰年份、90后/00后占比、最年轻/年长、高层级黄金年龄等
+    - top_youth_companies: 95后/00后青年人才汇聚企业 Top 10
+    """
+    import re
+    from collections import defaultdict
 
+    records = db.query(
+        HzTalentNotice.birth_date,
+        HzTalentNotice.gender,
+        HzTalentNotice.apply_type,
+        HzTalentNotice.work_unit
+    ).filter(
+        HzTalentNotice.birth_date.isnot(None),
+        HzTalentNotice.birth_date != "",
+        HzTalentNotice.birth_date.op("REGEXP")("^[0-9]{4}年")
+    ).all()
+
+    year_map = defaultdict(lambda: {
+        "year": 0,
+        "count": 0,
+        "male": 0,
+        "female": 0,
+        "other_gender": 0,
+        "b_count": 0,
+        "c_count": 0,
+        "d_count": 0,
+        "e_count": 0
+    })
+
+    decades = {
+        "00后": {"key": "00后", "label": "00后 (2000+)", "range": "2000-", "count": 0, "male": 0, "female": 0, "high_level": 0},
+        "95后": {"key": "95后", "label": "95后 (1995-1999)", "range": "1995-1999", "count": 0, "male": 0, "female": 0, "high_level": 0},
+        "90-94": {"key": "90-94", "label": "90-94年 (1990-1994)", "range": "1990-1994", "count": 0, "male": 0, "female": 0, "high_level": 0},
+        "85-89": {"key": "85-89", "label": "85-89年 (1985-1989)", "range": "1985-1989", "count": 0, "male": 0, "female": 0, "high_level": 0},
+        "80-84": {"key": "80-84", "label": "80-84年 (1980-1984)", "range": "1980-1984", "count": 0, "male": 0, "female": 0, "high_level": 0},
+        "70后": {"key": "70后", "label": "70后 (1970-1979)", "range": "1970-1979", "count": 0, "male": 0, "female": 0, "high_level": 0},
+        "60后及更早": {"key": "60后及更早", "label": "60后及更早 (<1970)", "range": "<1970", "count": 0, "male": 0, "female": 0, "high_level": 0}
+    }
+
+    youth_comps = defaultdict(int)
+    broad_decades = {
+        "00后": 0,
+        "90后": 0,
+        "80后": 0,
+        "70后": 0,
+        "60后及更早": 0
+    }
+
+    total_valid = len(records)
+    sum_years = 0
+
+    for bd, gender, apply_type, work_unit in records:
+        m = re.match(r"^(\d{4})", (bd or "").strip())
+        if not m:
+            continue
+        y = int(m.group(1))
+        sum_years += y
+
+        ym = year_map[y]
+        ym["year"] = y
+        ym["count"] += 1
+        if gender == "男":
+            ym["male"] += 1
+        elif gender == "女":
+            ym["female"] += 1
+        else:
+            ym["other_gender"] += 1
+
+        app_str = apply_type or ""
+        is_high = False
+        if "B类" in app_str:
+            ym["b_count"] += 1
+            is_high = True
+        elif "C类" in app_str:
+            ym["c_count"] += 1
+            is_high = True
+        elif "D类" in app_str:
+            ym["d_count"] += 1
+            is_high = True
+        elif "E类" in app_str:
+            ym["e_count"] += 1
+
+        if y >= 2000:
+            dk = "00后"
+            broad_decades["00后"] += 1
+        elif y >= 1995:
+            dk = "95后"
+            broad_decades["90后"] += 1
+        elif y >= 1990:
+            dk = "90-94"
+            broad_decades["90后"] += 1
+        elif y >= 1985:
+            dk = "85-89"
+            broad_decades["80后"] += 1
+        elif y >= 1980:
+            dk = "80-84"
+            broad_decades["80后"] += 1
+        elif y >= 1970:
+            dk = "70后"
+            broad_decades["70后"] += 1
+        else:
+            dk = "60后及更早"
+            broad_decades["60后及更早"] += 1
+
+        decades[dk]["count"] += 1
+        if gender == "男":
+            decades[dk]["male"] += 1
+        elif gender == "女":
+            decades[dk]["female"] += 1
+        if is_high:
+            decades[dk]["high_level"] += 1
+
+        if y >= 1995 and work_unit and work_unit.strip():
+            youth_comps[work_unit.strip()] += 1
+
+    sorted_years = sorted(year_map.keys())
+    timeline = [year_map[y] for y in sorted_years]
+
+    peak_item = max(timeline, key=lambda x: x["count"]) if timeline else {"year": 0, "count": 0}
+    min_year = sorted_years[0] if sorted_years else 0
+    max_year = sorted_years[-1] if sorted_years else 0
+    avg_year = round(sum_years / total_valid, 1) if total_valid > 0 else 0
+    current_year = datetime.now().year
+    avg_age = round(current_year - avg_year, 1) if avg_year > 0 else 0
+
+    youth_count = broad_decades["00后"] + broad_decades["90后"]
+    youth_ratio = round(youth_count / total_valid * 100, 1) if total_valid > 0 else 0
+
+    top_youth_companies = [
+        {"company": c, "count": cnt}
+        for c, cnt in sorted(youth_comps.items(), key=lambda x: x[1], reverse=True)[:10]
+    ]
+
+    decade_summary = []
+    for k, v in decades.items():
+        pct = round(v["count"] / total_valid * 100, 1) if total_valid > 0 else 0
+        decade_summary.append({
+            "key": v["key"],
+            "label": v["label"],
+            "count": v["count"],
+            "percentage": pct,
+            "male": v["male"],
+            "female": v["female"],
+            "high_level": v["high_level"]
+        })
+
+    broad_summary = [
+        {"decade": k, "count": v, "percentage": round(v / total_valid * 100, 1) if total_valid > 0 else 0}
+        for k, v in broad_decades.items()
+    ]
+
+    # 计算 B/C/D/E 各层级人才出生年份专属统计指标
+    level_stats = {}
+    for l_key, l_field, l_name in [
+        ("B", "b_count", "B类 (国家级领军)"),
+        ("C", "c_count", "C类 (省级领军)"),
+        ("D", "d_count", "D类 (市级领军)"),
+        ("E", "e_count", "E类 (高级人才)")
+    ]:
+        l_items = [(t["year"], t[l_field]) for t in timeline if t.get(l_field, 0) > 0]
+        l_total = sum(c for _, c in l_items)
+        l_sum_y = sum(y * c for y, c in l_items)
+        l_avg_y = round(l_sum_y / l_total, 1) if l_total else 0
+        l_avg_age = round(current_year - l_avg_y, 1) if l_avg_y else 0
+        l_peak = max(l_items, key=lambda x: x[1]) if l_items else (0, 0)
+        level_stats[l_key] = {
+            "name": l_name,
+            "code": l_key,
+            "total": l_total,
+            "ratio": round(l_total / total_valid * 100, 1) if total_valid else 0,
+            "peak_year": l_peak[0],
+            "peak_count": l_peak[1],
+            "avg_birth_year": l_avg_y,
+            "avg_age": l_avg_age,
+            "years_count": len(l_items),
+            "top_years": [{"year": y, "count": c} for y, c in sorted(l_items, key=lambda x: x[1], reverse=True)[:5]]
+        }
+
+    return {
+        "total_records": total_valid,
+        "kpis": {
+            "total": total_valid,
+            "peak_year": peak_item["year"],
+            "peak_count": peak_item["count"],
+            "youngest_year": max_year,
+            "youngest_count": year_map[max_year]["count"] if max_year in year_map else 0,
+            "oldest_year": min_year,
+            "oldest_count": year_map[min_year]["count"] if min_year in year_map else 0,
+            "avg_birth_year": avg_year,
+            "avg_age": avg_age,
+            "youth_count": youth_count,
+            "youth_ratio": youth_ratio,
+            "level_stats": level_stats
+        },
+        "level_stats": level_stats,
+        "timeline": timeline,
+        "decade_summary": decade_summary,
+        "broad_summary": broad_summary,
+        "top_youth_companies": top_youth_companies
+    }
 
 @router.get("/notice-crawl-runs", response_model=PageResult[Any])
 def list_notice_crawl_runs(
@@ -1983,6 +2233,134 @@ def get_qcc_bid_crawl_status(db: Session = Depends(get_db)):
         "last_run_info": qcc_crawler_manager.last_run_info,
         "latest_run": latest_data
     }
+
+# ----------------------------------------------------------------------
+# 13. 前沿技术动态 (Frontier Tech / Twitter Posts)
+# ----------------------------------------------------------------------
+@router.get("/frontier-tech", response_model=PageResult[Any])
+def list_frontier_tech_posts(
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页大小"),
+    keyword: Optional[str] = Query(None, description="搜索推文内容或作者"),
+    author: Optional[str] = Query(None, description="作者handle过滤"),
+    db: Session = Depends(get_db)
+):
+    query = db.query(TwitterFrontierTechPost)
+    if author and author.strip():
+        query = query.filter(TwitterFrontierTechPost.author_username == author.strip())
+    if keyword and keyword.strip():
+        kw = keyword.strip()
+        query = query.filter(
+            or_(
+                TwitterFrontierTechPost.content.ilike(f"%{kw}%"),
+                TwitterFrontierTechPost.content_zh.ilike(f"%{kw}%"),
+                TwitterFrontierTechPost.author_name.ilike(f"%{kw}%"),
+                TwitterFrontierTechPost.author_username.ilike(f"%{kw}%")
+            )
+        )
+    query = query.order_by(
+        desc(TwitterFrontierTechPost.published_at),
+        desc(TwitterFrontierTechPost.id)
+    )
+
+    def serialize_post(p: TwitterFrontierTechPost):
+        return {
+            "id": p.id,
+            "tweet_id": p.tweet_id,
+            "author_username": p.author_username,
+            "author_name": p.author_name,
+            "content": p.content,
+            "content_zh": p.content_zh,
+            "tweet_url": p.tweet_url,
+            "published_at": p.published_at.isoformat() if p.published_at else None,
+            "media_urls": p.media_urls or [],
+            "metrics": p.metrics or {},
+            "is_retweet": p.is_retweet,
+            "raw_data": p.raw_data or {},
+            "created_at": p.created_at.isoformat() if p.created_at else None
+        }
+
+    return paginate_query(query, page, page_size, serializer=serialize_post)
+
+
+class FrontierTechPostCreate(BaseModel):
+    tweet_id: str
+    author_username: str = "trq212"
+    author_name: str = ""
+    content: Optional[str] = None
+    content_zh: Optional[str] = None
+    tweet_url: str
+    published_at: Optional[datetime] = None
+    media_urls: Optional[List[str]] = None
+    metrics: Optional[Dict[str, Any]] = None
+    is_retweet: int = 0
+    raw_data: Optional[Dict[str, Any]] = None
+
+@router.post("/frontier-tech/batch-upsert")
+def batch_upsert_frontier_tech_posts(
+    posts: List[FrontierTechPostCreate],
+    db: Session = Depends(get_db)
+):
+    inserted = 0
+    updated = 0
+    for p in posts:
+        existing = db.query(TwitterFrontierTechPost).filter(TwitterFrontierTechPost.tweet_id == p.tweet_id).first()
+        if existing:
+            if p.content:
+                existing.content = p.content
+            if p.content_zh is not None:
+                existing.content_zh = p.content_zh
+            if p.author_name:
+                existing.author_name = p.author_name
+            if p.published_at:
+                existing.published_at = p.published_at
+            if p.metrics:
+                existing.metrics = p.metrics
+            if p.media_urls:
+                existing.media_urls = p.media_urls
+            if p.raw_data:
+                existing.raw_data = p.raw_data
+            existing.is_retweet = p.is_retweet
+            updated += 1
+        else:
+            new_item = TwitterFrontierTechPost(
+                tweet_id=p.tweet_id,
+                author_username=p.author_username,
+                author_name=p.author_name,
+                content=p.content,
+                content_zh=p.content_zh,
+                tweet_url=p.tweet_url,
+                published_at=p.published_at,
+                media_urls=p.media_urls,
+                metrics=p.metrics,
+                is_retweet=p.is_retweet,
+                raw_data=p.raw_data
+            )
+            db.add(new_item)
+            inserted += 1
+    db.commit()
+    return {"success": True, "inserted": inserted, "updated": updated, "total": len(posts)}
+
+
+class FrontierTechPostUpdate(BaseModel):
+    content_zh: Optional[str] = None
+
+@router.patch("/frontier-tech/{post_id}")
+def update_frontier_tech_post(
+    post_id: int,
+    payload: FrontierTechPostUpdate,
+    db: Session = Depends(get_db)
+):
+    post = db.query(TwitterFrontierTechPost).filter(TwitterFrontierTechPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="推文记录未找到")
+    if payload.content_zh is not None:
+        post.content_zh = payload.content_zh
+    db.commit()
+    db.refresh(post)
+    return {"success": True, "id": post.id, "content_zh": post.content_zh}
+
+
 
 
 

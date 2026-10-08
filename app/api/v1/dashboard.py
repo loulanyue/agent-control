@@ -17,7 +17,8 @@ from app.models.extensions import (
     SoftExamKnowledgePoint, SelfProjectIteration,
     BitcoinMiningRun,
     AgentArchitecturePosition, AgentArchitectureRequirement,
-    QccCompanyBid, QccBidCrawlRun
+    QccCompanyBid, QccBidCrawlRun,
+    TwitterFrontierTechPost
 )
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
@@ -95,6 +96,13 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         "qcc_bids": {
             "total_bids": db.query(func.count(QccCompanyBid.id)).scalar() or 0,
             "crawl_runs": db.query(func.count(QccBidCrawlRun.id)).scalar() or 0
+        },
+        "frontier_tech": {
+            "total_posts": db.query(func.count(TwitterFrontierTechPost.id)).scalar() or 0,
+            "translated_posts": db.query(func.count(TwitterFrontierTechPost.id)).filter(
+                TwitterFrontierTechPost.content_zh.isnot(None),
+                TwitterFrontierTechPost.content_zh != ""
+            ).scalar() or 0
         }
     }
 

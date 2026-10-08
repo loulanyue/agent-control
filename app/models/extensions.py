@@ -372,5 +372,20 @@ class QccBidCrawlRun(Base):
     duration_sec = Column(Float, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class TwitterFrontierTechPost(Base):
+    __tablename__ = "twitter_frontier_tech_posts"
 
-
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    tweet_id = Column(String(64), unique=True, nullable=False, index=True)
+    author_username = Column(String(64), nullable=False, default="trq212", index=True)
+    author_name = Column(String(128), default="")
+    content = Column(Text, nullable=True)
+    content_zh = Column(Text, nullable=True)
+    tweet_url = Column(String(512), nullable=False)
+    published_at = Column(DateTime, nullable=True, index=True)
+    media_urls = Column(JSON, nullable=True)
+    metrics = Column(JSON, nullable=True)
+    is_retweet = Column(SmallInteger, default=0)
+    raw_data = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

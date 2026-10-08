@@ -384,6 +384,44 @@
         </div>
       </section>
 
+      <!-- 前沿技术专属：X (Twitter) @trq212 Claude Code 专家动态与前沿思考 -->
+      <section v-if="currentMenuId === 'frontier_tech'" class="p-4 bg-gradient-to-r from-slate-900 via-sky-950/40 to-indigo-950/40 border-b border-slate-800/80 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div class="flex items-center space-x-3.5">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white text-lg font-bold shadow-md shadow-sky-500/20">
+              <i class="fa-solid fa-atom"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <h2 class="text-sm font-bold text-white tracking-wide">前沿技术动态 · X (@trq212) 技术前沿与 AI 思考</h2>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">Claude Code @ Anthropic</span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Agent / Workflows / 架构设计</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-0.5">
+                实时收录并沉淀来自 Anthropic Claude Code 团队核心开发者 Thariq (@trq212) 的所有公开推文、Agent 深度技术解析、动态工作流方案及工程实践。
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="bg-slate-800/80 border border-slate-700/80 rounded-lg px-3 py-1.5 text-center">
+              <div class="text-[10px] text-slate-400">已收录动态数</div>
+              <div class="text-base font-bold text-sky-400 font-mono">[[ pagination.total || stats.frontier_tech_total || 201 ]]</div>
+            </div>
+            <div class="bg-slate-800/80 border border-amber-500/30 rounded-lg px-3 py-1.5 text-center">
+              <div class="text-[10px] text-amber-400/80">中文推文覆盖</div>
+              <div class="text-base font-bold text-amber-400 font-mono">[[ stats.frontier_tech_translated || pagination.total || 201 ]]</div>
+            </div>
+            <a
+              href="https://x.com/trq212"
+              target="_blank"
+              class="px-3 py-2 bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/40 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition">
+              <i class="fa-brands fa-x-twitter text-sm"></i>
+              <span>访问原博主主页</span>
+            </a>
+          </div>
+        </div>
+      </section>
+
       <!-- 岗位能力专属：多企业招聘全景与公司维度标签卡片 -->
       <section v-if="currentMenuId === 'jobs'" class="p-4 bg-gradient-to-r from-slate-900 via-slate-900/95 to-indigo-950/30 border-b border-slate-800/80 space-y-3">
         <div class="flex flex-wrap items-center justify-between gap-4">
@@ -444,7 +482,7 @@
 
       <!-- 搜索与筛选工具栏 -->
       <section class="p-4 border-b border-slate-800/80 bg-slate-900/20 flex flex-wrap items-center justify-between gap-3">
-        <!-- 人才公示专属多维筛选栏 (支持单独按日期、按分类模糊搜索、综合关键词) -->
+        <!-- 人才公示专属多维筛选栏 (支持单独按日期、按分类模糊搜索、出生年份、排序、综合关键词) -->
         <div v-if="currentSubTab.endpoint === '/api/v1/extensions/talent-notices' || currentSubTab.endpoint === '/api/v1/extensions/hf-talent-records'" class="flex flex-wrap items-center gap-2.5 flex-1 min-w-[320px]">
           <!-- 1. 按公示发布日期筛选 -->
           <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
@@ -465,14 +503,55 @@
             </button>
           </div>
 
-          <!-- 2. 按人才分类模糊搜索 -->
-          <div class="relative min-w-[200px] max-w-[240px]">
+          <!-- 2. 排序方式选择 (仅杭州人才公示支持出生年月排序) -->
+          <div v-if="currentSubTab.endpoint === '/api/v1/extensions/talent-notices'" class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+            <i class="fa-solid fa-arrow-down-up-across-line text-indigo-400"></i>
+            <span class="text-slate-400 text-[11px] select-none">排序:</span>
+            <select
+              v-model="talentSortCombined"
+              @change="handleTalentSortChange"
+              class="bg-transparent text-slate-200 text-xs focus:outline-none cursor-pointer">
+              <option value="publish_date_desc" class="bg-slate-900 text-slate-200">按发布日期倒序 (最新优先)</option>
+              <option value="publish_date_asc" class="bg-slate-900 text-slate-200">按发布日期正序 (早期优先)</option>
+              <option value="birth_date_desc" class="bg-slate-900 text-indigo-300 font-semibold">按出生年月倒序 (年轻优先)</option>
+              <option value="birth_date_asc" class="bg-slate-900 text-slate-200">按出生年月正序 (年长优先)</option>
+            </select>
+          </div>
+
+          <!-- 3. 出生年份/年代筛选 (仅杭州人才公示支持) -->
+          <div v-if="currentSubTab.endpoint === '/api/v1/extensions/talent-notices'" class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+            <i class="fa-solid fa-cake-candles text-amber-400"></i>
+            <span class="text-slate-400 text-[11px] select-none">出生年代:</span>
+            <select
+              v-model="filterBirthYear"
+              @change="handleSearch"
+              class="bg-transparent text-slate-200 text-xs focus:outline-none cursor-pointer">
+              <option value="" class="bg-slate-900 text-slate-400">全部年代</option>
+              <option value="00后" class="bg-slate-900 text-emerald-300 font-medium">00后 (2000+)</option>
+              <option value="95后" class="bg-slate-900 text-indigo-300 font-semibold">95后 (1995-1999)</option>
+              <option value="90后" class="bg-slate-900 text-indigo-200">90后 (1990-1999)</option>
+              <option value="85后" class="bg-slate-900 text-slate-200">85后 (1985-1989)</option>
+              <option value="80后" class="bg-slate-900 text-slate-200">80后 (1980-1989)</option>
+              <option value="70后" class="bg-slate-900 text-slate-200">70后 (1970-1979)</option>
+              <option value="60后" class="bg-slate-900 text-slate-200">60后及更早</option>
+            </select>
+            <button
+              v-if="filterBirthYear"
+              @click="filterBirthYear = ''; handleSearch()"
+              class="text-slate-400 hover:text-rose-400 text-[10px] ml-1"
+              title="清除出生年代筛选">
+              <i class="fa-solid fa-circle-xmark"></i>
+            </button>
+          </div>
+
+          <!-- 4. 按人才分类模糊搜索 -->
+          <div class="relative min-w-[170px] max-w-[210px]">
             <i class="fa-solid fa-tags absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
             <input
               type="text"
               v-model="filterCategory"
               @keyup.enter="handleSearch"
-              placeholder="按分类模糊搜索 (如: E类, 博士)..."
+              placeholder="分类搜索 (如: E类, 博士)..."
               class="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
             <button
               v-if="filterCategory"
@@ -482,8 +561,8 @@
             </button>
           </div>
 
-          <!-- 3. 快捷类别标签 -->
-          <div class="hidden lg:flex items-center gap-1">
+          <!-- 5. 快捷类别标签 -->
+          <div class="hidden xl:flex items-center gap-1">
             <button
               v-for="cat in ['E类', 'D类', 'C类', '具有博士学位']"
               :key="cat"
@@ -494,8 +573,8 @@
             </button>
           </div>
 
-          <!-- 4. 申报人/单位综合搜索 -->
-          <div class="relative min-w-[180px] flex-1">
+          <!-- 6. 申报人/单位综合搜索 -->
+          <div class="relative min-w-[160px] flex-1">
             <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
             <input
               type="text"
@@ -512,7 +591,7 @@
             查询
           </button>
           <button
-            v-if="searchKeyword || filterDate || filterCategory"
+            v-if="searchKeyword || filterDate || filterCategory || filterBirthYear || (talentSortBy && talentSortBy !== 'publish_date') || talentSortOrder !== 'desc'"
             @click="clearSearch"
             class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs flex-shrink-0 transition border border-slate-700">
             重置
@@ -636,6 +715,14 @@
                   <span>杭合人才日期趋势</span>
                   <span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-1 py-0.2 rounded font-mono font-bold border border-emerald-500/30">双城对比</span>
                 </button>
+                <button
+                  @click="switchAnalyticsTab('birth_year')"
+                  :class="activeAnalyticsTab === 'birth_year' ? 'bg-indigo-600 text-white font-semibold shadow-md' : 'text-slate-400 hover:text-white'"
+                  class="px-3 py-1 rounded-md text-xs transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-cake-candles text-[11px] text-amber-400"></i>
+                  <span>出生年份统计维度</span>
+                  <span class="text-[9px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-mono font-bold border border-amber-500/30">青年画像</span>
+                </button>
               </div>
             </div>
 
@@ -693,7 +780,7 @@
               </template>
 
               <!-- 日期趋势控制项 -->
-              <template v-else>
+              <template v-else-if="activeAnalyticsTab === 'date'">
                 <!-- 天数范围选择 -->
                 <div class="flex bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-[11px]">
                   <button
@@ -733,6 +820,103 @@
                     柱状图
                   </button>
                 </div>
+              </template>
+
+              <!-- 出生年份维度控制项 -->
+              <!-- 出生年份维度控制项 -->
+              <template v-else-if="activeAnalyticsTab === 'birth_year'">
+                <!-- 图表展示模式切换 -->
+                <div class="flex flex-wrap items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-[11px] gap-0.5">
+                  <button
+                    @click="changeBirthYearChartType('level')"
+                    :class="birthYearChartType === 'level' ? 'bg-indigo-600 text-white font-semibold shadow' : 'text-slate-400 hover:text-white'"
+                    class="px-2 py-0.5 rounded transition flex items-center gap-1"
+                    title="B/C/D/E 四大层级逐年堆叠柱状图">
+                    <i class="fa-solid fa-layer-group text-[10px]"></i>
+                    全级堆叠
+                  </button>
+                  <button
+                    @click="changeBirthYearChartType('level_e')"
+                    :class="birthYearChartType === 'level_e' ? 'bg-sky-600 text-white font-semibold shadow' : 'text-slate-400 hover:text-white'"
+                    class="px-2 py-0.5 rounded transition flex items-center gap-1"
+                    title="E类人才逐年分布 (2,606人, 顶峰1997年)">
+                    <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+                    E类分布
+                  </button>
+                  <button
+                    @click="changeBirthYearChartType('level_d')"
+                    :class="birthYearChartType === 'level_d' ? 'bg-purple-600 text-white font-semibold shadow' : 'text-slate-400 hover:text-white'"
+                    class="px-2 py-0.5 rounded transition flex items-center gap-1"
+                    title="D类人才逐年分布 (258人, 顶峰1981/1994年)">
+                    <span class="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                    D类分布
+                  </button>
+                  <button
+                    @click="changeBirthYearChartType('level_c')"
+                    :class="birthYearChartType === 'level_c' ? 'bg-orange-600 text-white font-semibold shadow' : 'text-slate-400 hover:text-white'"
+                    class="px-2 py-0.5 rounded transition flex items-center gap-1"
+                    title="C类人才逐年分布 (25人, 顶峰1982年)">
+                    <span class="w-1.5 h-1.5 rounded-full bg-orange-400"></span>
+                    C类分布
+                  </button>
+                  <button
+                    @click="changeBirthYearChartType('level_b')"
+                    :class="birthYearChartType === 'level_b' ? 'bg-amber-600 text-white font-semibold shadow' : 'text-slate-400 hover:text-white'"
+                    class="px-2 py-0.5 rounded transition flex items-center gap-1"
+                    title="B类人才逐年分布 (3人, 1957/1975年)">
+                    <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                    B类分布
+                  </button>
+                  <button
+                    @click="changeBirthYearChartType('high_level')"
+                    :class="birthYearChartType === 'high_level' ? 'bg-indigo-600 text-white font-semibold shadow' : 'text-slate-400 hover:text-white'"
+                    class="px-2 py-0.5 rounded transition flex items-center gap-1"
+                    title="聚焦 B/C/D 高层级领军人才逐年梯队，剥离海量E类基数">
+                    <i class="fa-solid fa-ranking-star text-[10px] text-amber-300"></i>
+                    高层级(B/C/D)
+                  </button>
+                  <button
+                    @click="changeBirthYearChartType('lines')"
+                    :class="birthYearChartType === 'lines' ? 'bg-indigo-600 text-white font-semibold shadow' : 'text-slate-400 hover:text-white'"
+                    class="px-2 py-0.5 rounded transition flex items-center gap-1"
+                    title="B/C/D/E 四类逐年走势同台多折线对比">
+                    <i class="fa-solid fa-chart-line text-[10px]"></i>
+                    四类走势
+                  </button>
+                  <button
+                    @click="changeBirthYearChartType('bar')"
+                    :class="birthYearChartType === 'bar' ? 'bg-indigo-600 text-white font-semibold shadow' : 'text-slate-400 hover:text-white'"
+                    class="px-2 py-0.5 rounded transition flex items-center gap-1"
+                    title="申报人才逐年总量走势">
+                    <i class="fa-solid fa-chart-column text-[10px]"></i>
+                    总量
+                  </button>
+                  <button
+                    @click="changeBirthYearChartType('gender')"
+                    :class="birthYearChartType === 'gender' ? 'bg-indigo-600 text-white font-semibold shadow' : 'text-slate-400 hover:text-white'"
+                    class="px-2 py-0.5 rounded transition flex items-center gap-1"
+                    title="男女比例逐年堆叠">
+                    <i class="fa-solid fa-venus-mars text-[10px]"></i>
+                    男女
+                  </button>
+                </div>
+
+                <button
+                  @click="birthYearShowTable = !birthYearShowTable"
+                  :class="birthYearShowTable ? 'bg-indigo-600 text-white font-semibold' : 'bg-slate-800 text-slate-300 hover:text-white'"
+                  class="px-2 py-0.5 rounded-lg border border-slate-700 text-[11px] flex items-center gap-1 transition"
+                  title="展开/收起逐年各类别详细数据对比表">
+                  <i class="fa-solid fa-table text-[10px]"></i>
+                  [[ birthYearShowTable ? '收起明细表' : '逐年明细表' ]]
+                </button>
+
+                <button
+                  @click="fetchBirthYearStats"
+                  class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 text-[11px] flex items-center gap-1 transition"
+                  title="重新计算出生年份分布统计">
+                  <i class="fa-solid fa-rotate text-[10px]" :class="birthYearStatsLoading ? 'fa-spin text-indigo-400' : ''"></i>
+                  刷新
+                </button>
               </template>
 
               <!-- 通用折叠/展开按钮 -->
@@ -787,7 +971,7 @@
           </div>
 
           <!-- 2. 日期趋势 KPI 条 -->
-          <div v-else class="px-4 py-2.5 bg-slate-950/40 border-b border-slate-800/80 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+          <div v-else-if="activeAnalyticsTab === 'date'" class="px-4 py-2.5 bg-slate-950/40 border-b border-slate-800/80 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
             <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-center justify-between">
               <span class="text-slate-400 text-[11px]">公示发布天数</span>
               <span class="font-bold text-white font-mono text-sm">[[ dateStats.days_count ]] 天</span>
@@ -820,6 +1004,175 @@
             <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-center justify-between">
               <span class="text-slate-400 text-[11px]">日均公示认定</span>
               <span class="font-bold text-slate-200 font-mono text-sm">[[ (dateStats.grand_total / (dateStats.days_count || 1)).toFixed(1) ]] 人/天</span>
+            </div>
+          </div>
+
+          <!-- 3. 出生年份维度 KPI 条与四大类别人才逐年分布速览卡片 -->
+          <div v-else-if="activeAnalyticsTab === 'birth_year'" class="border-b border-slate-800/80 bg-slate-950/40">
+            <!-- 3.1 宏观出生年代概览 -->
+            <div class="px-4 pt-2.5 pb-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+              <div class="bg-indigo-500/5 p-2 rounded-lg border border-indigo-500/20 flex items-center justify-between cursor-pointer hover:bg-indigo-500/10 transition" @click="filterByBirthYear(birthYearStats.kpis?.peak_year || 1997)" title="点击筛选顶峰年份申报人">
+                <span class="text-indigo-400 text-[11px] font-semibold flex items-center gap-1">
+                  <i class="fa-solid fa-crown text-[10px] text-amber-400"></i>
+                  主力出生年份
+                </span>
+                <span class="font-bold text-indigo-300 font-mono text-sm">[[ birthYearStats.kpis?.peak_year || 1997 ]]年 ([[ birthYearStats.kpis?.peak_count || 0 ]]人)</span>
+              </div>
+              <div class="bg-emerald-500/5 p-2 rounded-lg border border-emerald-500/20 flex items-center justify-between cursor-pointer hover:bg-emerald-500/10 transition" @click="filterByBirthYear('90后')" title="点击筛选90后与00后青年人才">
+                <span class="text-emerald-400 text-[11px] font-semibold flex items-center gap-1">
+                  <i class="fa-solid fa-user-graduate text-[10px]"></i>
+                  90/00后青年大军
+                </span>
+                <span class="font-bold text-emerald-300 font-mono text-sm">[[ formatNumber(birthYearStats.kpis?.youth_count || 0) ]] 人 ([[ birthYearStats.kpis?.youth_ratio || 0 ]]%)</span>
+              </div>
+              <div class="bg-pink-500/5 p-2 rounded-lg border border-pink-500/20 flex items-center justify-between cursor-pointer hover:bg-pink-500/10 transition" @click="filterByBirthYear(birthYearStats.kpis?.youngest_year || 2003)" title="点击筛选最年轻申报人">
+                <span class="text-pink-400 text-[11px] font-semibold flex items-center gap-1">
+                  <i class="fa-solid fa-seedling text-[10px]"></i>
+                  最年轻认定人才
+                </span>
+                <span class="font-bold text-pink-300 font-mono text-sm">[[ birthYearStats.kpis?.youngest_year || 2003 ]] 年 ([[ birthYearStats.kpis?.youngest_count || 0 ]]人)</span>
+              </div>
+              <div class="bg-sky-500/5 p-2 rounded-lg border border-sky-500/20 flex items-center justify-between">
+                <span class="text-sky-400 text-[11px] font-semibold flex items-center gap-1">
+                  <i class="fa-solid fa-hourglass-half text-[10px]"></i>
+                  平均年龄画像
+                </span>
+                <span class="font-bold text-sky-300 font-mono text-sm">[[ birthYearStats.kpis?.avg_birth_year || 1990 ]]年 (约[[ birthYearStats.kpis?.avg_age || 36 ]]岁)</span>
+              </div>
+              <div class="bg-amber-500/5 p-2 rounded-lg border border-amber-500/20 flex items-center justify-between cursor-pointer hover:bg-amber-500/10 transition" @click="filterByBirthYear('80后')" title="点击筛选80后领军骨干">
+                <span class="text-amber-400 text-[11px] font-semibold flex items-center gap-1">
+                  <i class="fa-solid fa-award text-[10px]"></i>
+                  高层级黄金期
+                </span>
+                <span class="font-bold text-amber-300 font-mono text-sm">80后骨干领跑 (104人)</span>
+              </div>
+              <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-center justify-between">
+                <span class="text-slate-400 text-[11px]">有效年份覆盖样本</span>
+                <span class="font-bold text-slate-200 font-mono text-sm">[[ formatNumber(birthYearStats.total_records || 0) ]] / [[ formatNumber(companyStats.total_records || 2905) ]]</span>
+              </div>
+            </div>
+
+            <!-- 3.2 四大类别 (E类、D类、C类、B类) 出生年份梯队分布专区卡片 -->
+            <div class="px-4 pb-2.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
+              <!-- E类 (高级人才) -->
+              <div
+                @click="changeBirthYearChartType('level_e')"
+                :class="birthYearChartType === 'level_e' ? 'ring-2 ring-sky-500 bg-sky-950/40 border-sky-600/70' : 'bg-slate-900/70 border-slate-800 hover:border-sky-500/50 hover:bg-sky-950/20'"
+                class="p-2.5 rounded-xl border transition cursor-pointer flex flex-col justify-between group">
+                <div class="flex items-center justify-between mb-1.5">
+                  <span class="flex items-center gap-1.5 font-bold text-sky-400">
+                    <span class="w-2.5 h-2.5 rounded-full bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.6)]"></span>
+                    E类人才 (高级人才)
+                  </span>
+                  <span class="bg-sky-500/20 text-sky-300 text-[10px] px-1.5 py-0.2 rounded font-mono font-bold border border-sky-500/30">
+                    [[ birthYearStats.level_stats?.E?.total || 2606 ]] 人 ([[ birthYearStats.level_stats?.E?.ratio || 90.1 ]]%)
+                  </span>
+                </div>
+                <div class="space-y-1 text-[11px] text-slate-400">
+                  <div class="flex justify-between">
+                    <span>顶峰年份:</span>
+                    <span class="text-slate-200 font-mono font-semibold">[[ birthYearStats.level_stats?.E?.peak_year || 1997 ]]年 ([[ birthYearStats.level_stats?.E?.peak_count || 209 ]]人)</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span>平均出生与年龄:</span>
+                    <span class="text-sky-300 font-mono">[[ birthYearStats.level_stats?.E?.avg_birth_year || 1990.4 ]]年 (约[[ birthYearStats.level_stats?.E?.avg_age || 35.6 ]]岁)</span>
+                  </div>
+                  <div class="flex justify-between text-[10px] text-slate-500 pt-0.5 border-t border-slate-800/80">
+                    <span>逐年覆盖: 38个年份</span>
+                    <span class="text-sky-400 group-hover:underline">点击聚焦E类走势 →</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- D类 (市级领军人才) -->
+              <div
+                @click="changeBirthYearChartType('level_d')"
+                :class="birthYearChartType === 'level_d' ? 'ring-2 ring-purple-500 bg-purple-950/40 border-purple-600/70' : 'bg-slate-900/70 border-slate-800 hover:border-purple-500/50 hover:bg-purple-950/20'"
+                class="p-2.5 rounded-xl border transition cursor-pointer flex flex-col justify-between group">
+                <div class="flex items-center justify-between mb-1.5">
+                  <span class="flex items-center gap-1.5 font-bold text-purple-400">
+                    <span class="w-2.5 h-2.5 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.6)]"></span>
+                    D类人才 (市级领军)
+                  </span>
+                  <span class="bg-purple-500/20 text-purple-300 text-[10px] px-1.5 py-0.2 rounded font-mono font-bold border border-purple-500/30">
+                    [[ birthYearStats.level_stats?.D?.total || 258 ]] 人 ([[ birthYearStats.level_stats?.D?.ratio || 8.9 ]]%)
+                  </span>
+                </div>
+                <div class="space-y-1 text-[11px] text-slate-400">
+                  <div class="flex justify-between">
+                    <span>顶峰年份:</span>
+                    <span class="text-slate-200 font-mono font-semibold">[[ birthYearStats.level_stats?.D?.peak_year || 1981 ]]年 (各17人)</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span>平均出生与年龄:</span>
+                    <span class="text-purple-300 font-mono">[[ birthYearStats.level_stats?.D?.avg_birth_year || 1985.8 ]]年 (约[[ birthYearStats.level_stats?.D?.avg_age || 40.2 ]]岁)</span>
+                  </div>
+                  <div class="flex justify-between text-[10px] text-slate-500 pt-0.5 border-t border-slate-800/80">
+                    <span>核心主力: 80后领军骨干</span>
+                    <span class="text-purple-400 group-hover:underline">点击聚焦D类走势 →</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- C类 (省级领军人才) -->
+              <div
+                @click="changeBirthYearChartType('level_c')"
+                :class="birthYearChartType === 'level_c' ? 'ring-2 ring-orange-500 bg-orange-950/40 border-orange-600/70' : 'bg-slate-900/70 border-slate-800 hover:border-orange-500/50 hover:bg-orange-950/20'"
+                class="p-2.5 rounded-xl border transition cursor-pointer flex flex-col justify-between group">
+                <div class="flex items-center justify-between mb-1.5">
+                  <span class="flex items-center gap-1.5 font-bold text-orange-400">
+                    <span class="w-2.5 h-2.5 rounded-full bg-orange-400 shadow-[0_0_8px_rgba(249,115,22,0.6)]"></span>
+                    C类人才 (省级领军)
+                  </span>
+                  <span class="bg-orange-500/20 text-orange-300 text-[10px] px-1.5 py-0.2 rounded font-mono font-bold border border-orange-500/30">
+                    [[ birthYearStats.level_stats?.C?.total || 25 ]] 人 ([[ birthYearStats.level_stats?.C?.ratio || 0.9 ]]%)
+                  </span>
+                </div>
+                <div class="space-y-1 text-[11px] text-slate-400">
+                  <div class="flex justify-between">
+                    <span>顶峰年份:</span>
+                    <span class="text-slate-200 font-mono font-semibold">[[ birthYearStats.level_stats?.C?.peak_year || 1982 ]]年 (6人)</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span>平均出生与年龄:</span>
+                    <span class="text-orange-300 font-mono">[[ birthYearStats.level_stats?.C?.avg_birth_year || 1982.4 ]]年 (约[[ birthYearStats.level_stats?.C?.avg_age || 43.6 ]]岁)</span>
+                  </div>
+                  <div class="flex justify-between text-[10px] text-slate-500 pt-0.5 border-t border-slate-800/80">
+                    <span>核心主力: 70/80后学科领袖</span>
+                    <span class="text-orange-400 group-hover:underline">点击聚焦C类走势 →</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- B类 (国家级领军人才) -->
+              <div
+                @click="changeBirthYearChartType('level_b')"
+                :class="birthYearChartType === 'level_b' ? 'ring-2 ring-amber-500 bg-amber-950/40 border-amber-600/70' : 'bg-slate-900/70 border-slate-800 hover:border-amber-500/50 hover:bg-amber-950/20'"
+                class="p-2.5 rounded-xl border transition cursor-pointer flex flex-col justify-between group">
+                <div class="flex items-center justify-between mb-1.5">
+                  <span class="flex items-center gap-1.5 font-bold text-amber-400">
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.6)]"></span>
+                    B类人才 (国家级领军)
+                  </span>
+                  <span class="bg-amber-500/20 text-amber-300 text-[10px] px-1.5 py-0.2 rounded font-mono font-bold border border-amber-500/30">
+                    [[ birthYearStats.level_stats?.B?.total || 3 ]] 人 ([[ birthYearStats.level_stats?.B?.ratio || 0.1 ]]%)
+                  </span>
+                </div>
+                <div class="space-y-1 text-[11px] text-slate-400">
+                  <div class="flex justify-between">
+                    <span>申报年份:</span>
+                    <span class="text-slate-200 font-mono font-semibold">1957年(2人) / 1975年(1人)</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span>平均出生与年龄:</span>
+                    <span class="text-amber-300 font-mono">[[ birthYearStats.level_stats?.B?.avg_birth_year || 1963.0 ]]年 (约[[ birthYearStats.level_stats?.B?.avg_age || 63.0 ]]岁)</span>
+                  </div>
+                  <div class="flex justify-between text-[10px] text-slate-500 pt-0.5 border-t border-slate-800/80">
+                    <span>核心主力: 资深科学家与泰斗</span>
+                    <span class="text-amber-400 group-hover:underline">点击聚焦B类走势 →</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1036,6 +1389,401 @@
               </div>
             </div>
 
+            <!-- 视图 3: 杭州申报人才出生年份与代际分布 (birth_year) -->
+            <div v-show="activeAnalyticsTab === 'birth_year'">
+              <!-- 提示与年份/类别联动状态条 -->
+              <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div class="flex items-center gap-2 text-slate-400 text-[11px]">
+                  <i class="fa-solid fa-circle-info text-amber-400"></i>
+                  <span>点击柱体或数据点，可同时联动筛选【年份 + 类别】；支持切换 E类、D类、C类、B类逐年分布与展开下钻对照表</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div v-if="filterBirthYear" class="flex items-center gap-1.5 bg-amber-950/80 border border-amber-700/60 px-2.5 py-1 rounded-full text-amber-200 text-xs">
+                    <span>出生维度:</span>
+                    <span class="font-bold text-white font-mono">[[ filterBirthYear ]]</span>
+                    <button @click="filterBirthYear = ''; handleSearch()" class="text-amber-400 hover:text-rose-400 ml-1" title="清除出生维度筛选">
+                      <i class="fa-solid fa-circle-xmark"></i>
+                    </button>
+                  </div>
+                  <div v-if="filterCategory" class="flex items-center gap-1.5 bg-indigo-950/80 border border-indigo-700/60 px-2.5 py-1 rounded-full text-indigo-200 text-xs">
+                    <span>类别筛选:</span>
+                    <span class="font-bold text-white font-mono">[[ filterCategory ]]</span>
+                    <button @click="filterCategory = ''; handleSearch()" class="text-indigo-400 hover:text-rose-400 ml-1" title="清除类别筛选">
+                      <i class="fa-solid fa-circle-xmark"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 图表双列网格 -->
+              <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                <!-- 左侧 8 栏: 逐年出生年份分布柱状/堆积图 -->
+                <div class="lg:col-span-8 bg-slate-950/60 rounded-xl border border-slate-800/80 p-3 flex flex-col">
+                  <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <span class="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                      <i class="fa-solid fa-cake-candles" :class="birthYearChartType.startsWith('level_e') ? 'text-sky-400' : (birthYearChartType.startsWith('level_d') ? 'text-purple-400' : (birthYearChartType.startsWith('level_c') ? 'text-orange-400' : (birthYearChartType.startsWith('level_b') ? 'text-amber-400' : 'text-amber-400')))"></i>
+                      <span>
+                        [[ birthYearChartType === 'level_e' ? 'E类人才 (高级人才) 逐年申报分布 (1966~2003年)' : (birthYearChartType === 'level_d' ? 'D类人才 (市级领军) 逐年申报分布 (1968~1999年)' : (birthYearChartType === 'level_c' ? 'C类人才 (省级领军) 逐年申报分布 (1969~1996年)' : (birthYearChartType === 'level_b' ? 'B类人才 (国家级领军) 逐年申报分布 (1957~1975年)' : (birthYearChartType === 'high_level' ? '高层级人才 (B/C/D类) 逐年阶梯堆叠对比' : (birthYearChartType === 'lines' ? 'B/C/D/E 四大层级逐年多线走势对比' : (birthYearChartType === 'gender' ? '杭州人才男女比例逐年堆叠' : (birthYearChartType === 'bar' ? '杭州人才出生年份申报总量走势' : 'B/C/D/E 全层级梯队逐年堆叠'))))))) ]]
+                      </span>
+                    </span>
+
+                    <!-- 卡片内部快捷图表模式胶囊切换 -->
+                    <div class="flex items-center bg-slate-900 rounded-lg p-0.5 border border-slate-800 text-[10px]">
+                      <button
+                        @click="changeBirthYearChartType('level')"
+                        :class="birthYearChartType === 'level' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                        class="px-2 py-0.5 rounded transition">
+                        全级堆叠
+                      </button>
+                      <button
+                        @click="changeBirthYearChartType('level_e')"
+                        :class="birthYearChartType === 'level_e' ? 'bg-sky-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                        class="px-2 py-0.5 rounded transition flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>E类
+                      </button>
+                      <button
+                        @click="changeBirthYearChartType('level_d')"
+                        :class="birthYearChartType === 'level_d' ? 'bg-purple-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                        class="px-2 py-0.5 rounded transition flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-purple-400"></span>D类
+                      </button>
+                      <button
+                        @click="changeBirthYearChartType('level_c')"
+                        :class="birthYearChartType === 'level_c' ? 'bg-orange-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                        class="px-2 py-0.5 rounded transition flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-orange-400"></span>C类
+                      </button>
+                      <button
+                        @click="changeBirthYearChartType('level_b')"
+                        :class="birthYearChartType === 'level_b' ? 'bg-amber-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                        class="px-2 py-0.5 rounded transition flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>B类
+                      </button>
+                      <button
+                        @click="changeBirthYearChartType('high_level')"
+                        :class="birthYearChartType === 'high_level' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                        class="px-2 py-0.5 rounded transition">
+                        高层级
+                      </button>
+                      <button
+                        @click="changeBirthYearChartType('lines')"
+                        :class="birthYearChartType === 'lines' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                        class="px-2 py-0.5 rounded transition">
+                        四线走势
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- ECharts 出生年份图容器 -->
+                  <div ref="hzBirthYearChartEl" class="w-full" style="height: 340px;"></div>
+                  <div class="mt-1 text-[10px] text-slate-500 flex items-center justify-between">
+                    <span>💡 点击柱体/曲线点可直接下钻筛选对应年份与层级申报人</span>
+                    <span v-if="birthYearChartType === 'lines'" class="text-indigo-400 font-mono">双Y轴: 左轴为E类人数，右轴为B/C/D高层级人数</span>
+                  </div>
+                </div>
+
+                <!-- 右侧 4 栏: 年代梯队分布环形图与层级结构切换 -->
+                <div class="lg:col-span-4 bg-slate-950/60 rounded-xl border border-slate-800/80 p-3 flex flex-col justify-between">
+                  <div>
+                    <div class="flex items-center justify-between mb-2">
+                      <div class="flex items-center bg-slate-900 rounded-lg p-0.5 border border-slate-800 text-[11px]">
+                        <button
+                          @click="switchBirthYearRightTab('decade')"
+                          :class="birthYearRightTab === 'decade' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
+                          class="px-2.5 py-0.5 rounded transition flex items-center gap-1">
+                          <i class="fa-solid fa-chart-pie text-[10px]"></i>
+                          代际梯队分布
+                        </button>
+                        <button
+                          @click="switchBirthYearRightTab('level')"
+                          :class="birthYearRightTab === 'level' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
+                          class="px-2.5 py-0.5 rounded transition flex items-center gap-1">
+                          <i class="fa-solid fa-layer-group text-[10px]"></i>
+                          四类层级占比
+                        </button>
+                      </div>
+                      <span class="text-[10px] text-slate-500 font-mono">样本 2,892 人</span>
+                    </div>
+
+                    <!-- 年代环形图容器 -->
+                    <div v-show="birthYearRightTab === 'decade'" ref="hzDecadePieEl" class="w-full" style="height: 200px;"></div>
+                    <!-- 层级结构环形图容器 -->
+                    <div v-show="birthYearRightTab === 'level'" ref="hzLevelPieEl" class="w-full" style="height: 200px;"></div>
+                  </div>
+
+                  <!-- 右侧底部快捷联动卡片 -->
+                  <!-- 模式 1: 代际细分快捷点击标签卡片 -->
+                  <div v-show="birthYearRightTab === 'decade'" class="mt-3 p-3 bg-slate-900/90 rounded-xl border border-slate-800 text-xs space-y-2">
+                    <div class="flex items-center justify-between">
+                      <span class="text-slate-400 text-[11px] font-medium flex items-center gap-1">
+                        <i class="fa-solid fa-bolt text-amber-400"></i>
+                        代际梯队快捷联动筛选
+                      </span>
+                      <span class="text-[10px] text-slate-500 font-mono">点击直接过滤</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1.5 text-[11px] font-mono">
+                      <button
+                        v-for="d in (birthYearStats.decade_summary || [])"
+                        :key="d.key"
+                        @click="filterByBirthYear(d.key)"
+                        :class="filterBirthYear === d.key ? 'bg-indigo-600 text-white font-bold border-indigo-500' : 'bg-slate-950/80 text-slate-300 hover:text-white hover:bg-slate-800 border-slate-800'"
+                        class="p-1.5 rounded-lg border transition text-center truncate"
+                        :title="d.label + ': ' + d.count + '人 (' + d.percentage + '%)'">
+                        <div>[[ d.key ]]</div>
+                        <div class="text-[10px] opacity-75">[[ d.count ]]人</div>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- 模式 2: 四类层级快捷联动卡片 -->
+                  <div v-show="birthYearRightTab === 'level'" class="mt-3 p-3 bg-slate-900/90 rounded-xl border border-slate-800 text-xs space-y-2">
+                    <div class="flex items-center justify-between">
+                      <span class="text-slate-400 text-[11px] font-medium flex items-center gap-1">
+                        <i class="fa-solid fa-filter text-indigo-400"></i>
+                        层级类别快捷联动筛选
+                      </span>
+                      <span class="text-[10px] text-slate-500 font-mono">点击切换聚焦</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-1.5 text-[11px] font-mono">
+                      <button
+                        @click="changeBirthYearChartType('level_e'); setQuickCategory('E类')"
+                        :class="filterCategory === 'E类' ? 'bg-sky-600 text-white font-bold' : 'bg-slate-950/80 text-sky-300 hover:bg-sky-950/40 border-slate-800'"
+                        class="p-1.5 rounded-lg border transition text-left">
+                        <div class="font-bold flex items-center justify-between">
+                          <span>E类 (高级)</span>
+                          <span class="text-[10px]">90.1%</span>
+                        </div>
+                        <div class="text-[10px] text-slate-400 font-mono">2,606 人</div>
+                      </button>
+                      <button
+                        @click="changeBirthYearChartType('level_d'); setQuickCategory('D类')"
+                        :class="filterCategory === 'D类' ? 'bg-purple-600 text-white font-bold' : 'bg-slate-950/80 text-purple-300 hover:bg-purple-950/40 border-slate-800'"
+                        class="p-1.5 rounded-lg border transition text-left">
+                        <div class="font-bold flex items-center justify-between">
+                          <span>D类 (市级)</span>
+                          <span class="text-[10px]">8.9%</span>
+                        </div>
+                        <div class="text-[10px] text-slate-400 font-mono">258 人</div>
+                      </button>
+                      <button
+                        @click="changeBirthYearChartType('level_c'); setQuickCategory('C类')"
+                        :class="filterCategory === 'C类' ? 'bg-orange-600 text-white font-bold' : 'bg-slate-950/80 text-orange-300 hover:bg-orange-950/40 border-slate-800'"
+                        class="p-1.5 rounded-lg border transition text-left">
+                        <div class="font-bold flex items-center justify-between">
+                          <span>C类 (省级)</span>
+                          <span class="text-[10px]">0.9%</span>
+                        </div>
+                        <div class="text-[10px] text-slate-400 font-mono">25 人</div>
+                      </button>
+                      <button
+                        @click="changeBirthYearChartType('level_b'); setQuickCategory('B类')"
+                        :class="filterCategory === 'B类' ? 'bg-amber-600 text-white font-bold' : 'bg-slate-950/80 text-amber-300 hover:bg-amber-950/40 border-slate-800'"
+                        class="p-1.5 rounded-lg border transition text-left">
+                        <div class="font-bold flex items-center justify-between">
+                          <span>B类 (国家级)</span>
+                          <span class="text-[10px]">0.1%</span>
+                        </div>
+                        <div class="text-[10px] text-slate-400 font-mono">3 人</div>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 逐年 B/C/D/E 各类别申报人才分布明细对照表 -->
+              <div v-show="birthYearShowTable" class="mt-4 bg-slate-950/60 rounded-xl border border-slate-800/80 p-3">
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-table-list text-indigo-400 text-sm"></i>
+                    <span class="text-xs font-semibold text-slate-200">逐年 B/C/D/E 各类别申报人才分布明细对照表 (1957 ~ 2003年)</span>
+                    <span class="text-[10px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/30">共 [[ sortedBirthYearTimeline.length ]] 个年份</span>
+                  </div>
+                  <div class="flex items-center gap-2 text-slate-400 text-[11px]">
+                    <span>💡 点击表头排序，点击具体单元格数字可一键穿透下钻筛选名单</span>
+                    <button @click="birthYearShowTable = false" class="text-slate-400 hover:text-white px-2 py-0.5 bg-slate-900 rounded border border-slate-800">
+                      收起表格
+                    </button>
+                  </div>
+                </div>
+                <div class="overflow-x-auto max-h-[380px] overflow-y-auto">
+                  <table class="min-w-full text-left text-xs border-collapse whitespace-nowrap">
+                    <thead class="bg-slate-900 sticky top-0 border-b border-slate-800 text-slate-400 font-semibold select-none z-10">
+                      <tr>
+                        <th class="px-3 py-2 cursor-pointer hover:text-white" @click="toggleBirthYearTableSort('year')">
+                          <div class="flex items-center gap-1">
+                            <span>出生年份</span>
+                            <span v-if="birthYearTableSortField === 'year'" class="text-indigo-400 font-bold">
+                              <i :class="birthYearTableSortOrder === 'desc' ? 'fa-solid fa-arrow-down' : 'fa-solid fa-arrow-up'"></i>
+                            </span>
+                          </div>
+                        </th>
+                        <th class="px-3 py-2 text-center text-slate-400">当前参考年龄</th>
+                        <th class="px-3 py-2 text-right cursor-pointer hover:text-white font-bold text-slate-200" @click="toggleBirthYearTableSort('count')">
+                          <div class="flex items-center justify-end gap-1">
+                            <span>申报总人数</span>
+                            <span v-if="birthYearTableSortField === 'count'" class="text-indigo-400 font-bold">
+                              <i :class="birthYearTableSortOrder === 'desc' ? 'fa-solid fa-arrow-down' : 'fa-solid fa-arrow-up'"></i>
+                            </span>
+                          </div>
+                        </th>
+                        <th class="px-3 py-2 text-right cursor-pointer text-sky-400 hover:text-sky-300" @click="toggleBirthYearTableSort('e_count')">
+                          <div class="flex items-center justify-end gap-1">
+                            <span>E类 (高级人才)</span>
+                            <span v-if="birthYearTableSortField === 'e_count'" class="text-sky-300 font-bold">
+                              <i :class="birthYearTableSortOrder === 'desc' ? 'fa-solid fa-arrow-down' : 'fa-solid fa-arrow-up'"></i>
+                            </span>
+                          </div>
+                        </th>
+                        <th class="px-3 py-2 text-right cursor-pointer text-purple-400 hover:text-purple-300" @click="toggleBirthYearTableSort('d_count')">
+                          <div class="flex items-center justify-end gap-1">
+                            <span>D类 (市级领军)</span>
+                            <span v-if="birthYearTableSortField === 'd_count'" class="text-purple-300 font-bold">
+                              <i :class="birthYearTableSortOrder === 'desc' ? 'fa-solid fa-arrow-down' : 'fa-solid fa-arrow-up'"></i>
+                            </span>
+                          </div>
+                        </th>
+                        <th class="px-3 py-2 text-right cursor-pointer text-orange-400 hover:text-orange-300" @click="toggleBirthYearTableSort('c_count')">
+                          <div class="flex items-center justify-end gap-1">
+                            <span>C类 (省级领军)</span>
+                            <span v-if="birthYearTableSortField === 'c_count'" class="text-orange-300 font-bold">
+                              <i :class="birthYearTableSortOrder === 'desc' ? 'fa-solid fa-arrow-down' : 'fa-solid fa-arrow-up'"></i>
+                            </span>
+                          </div>
+                        </th>
+                        <th class="px-3 py-2 text-right cursor-pointer text-amber-400 hover:text-amber-300" @click="toggleBirthYearTableSort('b_count')">
+                          <div class="flex items-center justify-end gap-1">
+                            <span>B类 (国家级)</span>
+                            <span v-if="birthYearTableSortField === 'b_count'" class="text-amber-300 font-bold">
+                              <i :class="birthYearTableSortOrder === 'desc' ? 'fa-solid fa-arrow-down' : 'fa-solid fa-arrow-up'"></i>
+                            </span>
+                          </div>
+                        </th>
+                        <th class="px-3 py-2 text-right cursor-pointer text-yellow-300 hover:text-yellow-200" @click="toggleBirthYearTableSort('high_level')">
+                          <div class="flex items-center justify-end gap-1">
+                            <span>高层级(B+C+D)</span>
+                            <span v-if="birthYearTableSortField === 'high_level'" class="text-yellow-300 font-bold">
+                              <i :class="birthYearTableSortOrder === 'desc' ? 'fa-solid fa-arrow-down' : 'fa-solid fa-arrow-up'"></i>
+                            </span>
+                          </div>
+                        </th>
+                        <th class="px-3 py-2 text-center text-slate-400">男女比例</th>
+                        <th class="px-4 py-2 text-right text-slate-400">快捷操作</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60 font-mono">
+                      <tr
+                        v-for="row in sortedBirthYearTimeline"
+                        :key="row.year"
+                        class="hover:bg-slate-800/40 transition">
+                        <td class="px-3 py-2 font-bold text-white">
+                          <button
+                            @click="filterByBirthYear(row.year)"
+                            class="hover:text-indigo-400 hover:underline cursor-pointer"
+                            title="点击筛选该出生年份全部申报人">
+                            [[ row.year ]] 年
+                          </button>
+                        </td>
+                        <td class="px-3 py-2 text-center text-slate-400">
+                          约 [[ 2026 - row.year ]] 岁
+                        </td>
+                        <td class="px-3 py-2 text-right font-bold text-indigo-300">
+                          <button
+                            @click="filterByBirthYear(row.year)"
+                            class="px-2 py-0.5 rounded bg-indigo-500/10 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/20 cursor-pointer">
+                            [[ row.count ]] 人
+                          </button>
+                        </td>
+                        <td class="px-3 py-2 text-right font-medium">
+                          <button
+                            v-if="row.e_count > 0"
+                            @click="filterByBirthYearAndCategory(row.year, 'E类')"
+                            class="px-1.5 py-0.5 rounded bg-sky-500/10 hover:bg-sky-500/30 text-sky-400 border border-sky-500/20 cursor-pointer"
+                            :title="'筛选 ' + row.year + '年 E类人才 (' + row.e_count + '人)'">
+                            [[ row.e_count ]]
+                          </button>
+                          <span v-else class="text-slate-600">0</span>
+                        </td>
+                        <td class="px-3 py-2 text-right font-medium">
+                          <button
+                            v-if="row.d_count > 0"
+                            @click="filterByBirthYearAndCategory(row.year, 'D类')"
+                            class="px-1.5 py-0.5 rounded bg-purple-500/10 hover:bg-purple-500/30 text-purple-300 border border-purple-500/20 cursor-pointer font-bold"
+                            :title="'筛选 ' + row.year + '年 D类人才 (' + row.d_count + '人)'">
+                            [[ row.d_count ]]
+                          </button>
+                          <span v-else class="text-slate-600">0</span>
+                        </td>
+                        <td class="px-3 py-2 text-right font-medium">
+                          <button
+                            v-if="row.c_count > 0"
+                            @click="filterByBirthYearAndCategory(row.year, 'C类')"
+                            class="px-1.5 py-0.5 rounded bg-orange-500/10 hover:bg-orange-500/30 text-orange-300 border border-orange-500/20 cursor-pointer font-bold"
+                            :title="'筛选 ' + row.year + '年 C类人才 (' + row.c_count + '人)'">
+                            [[ row.c_count ]]
+                          </button>
+                          <span v-else class="text-slate-600">0</span>
+                        </td>
+                        <td class="px-3 py-2 text-right font-medium">
+                          <button
+                            v-if="row.b_count > 0"
+                            @click="filterByBirthYearAndCategory(row.year, 'B类')"
+                            class="px-1.5 py-0.5 rounded bg-amber-500/10 hover:bg-amber-500/30 text-amber-300 border border-amber-500/20 cursor-pointer font-bold animate-pulse"
+                            :title="'筛选 ' + row.year + '年 B类顶尖人才 (' + row.b_count + '人)'">
+                            [[ row.b_count ]]
+                          </button>
+                          <span v-else class="text-slate-600">0</span>
+                        </td>
+                        <td class="px-3 py-2 text-right font-bold text-yellow-300">
+                          <span v-if="(row.b_count || 0) + (row.c_count || 0) + (row.d_count || 0) > 0">
+                            [[ (row.b_count || 0) + (row.c_count || 0) + (row.d_count || 0) ]]
+                          </span>
+                          <span v-else class="text-slate-600">0</span>
+                        </td>
+                        <td class="px-3 py-2 text-center text-slate-400 text-[11px]">
+                          [[ row.male || 0 ]] 男 / [[ row.female || 0 ]] 女
+                        </td>
+                        <td class="px-4 py-2 text-right font-sans">
+                          <button
+                            @click="filterByBirthYear(row.year)"
+                            class="text-indigo-400 hover:text-indigo-300 hover:underline text-xs inline-flex items-center gap-1">
+                            <i class="fa-solid fa-list-check text-[10px]"></i>
+                            筛选该年名单
+                          </button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- 下方: 青年高层次人才 (95后/00后) 汇聚企业 Top 8 榜单 -->
+              <div class="mt-4 bg-slate-950/60 rounded-xl border border-slate-800/80 p-3">
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-building-columns text-emerald-400 text-sm"></i>
+                    <span class="text-xs font-semibold text-slate-200">95后 & 00后 青年高层次人才吸纳企业 Top 8</span>
+                    <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/30">青年引才领跑者</span>
+                  </div>
+                  <span class="text-[11px] text-slate-500">点击企业名称可直接联动企业搜索</span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+                  <div
+                    v-for="(comp, cIdx) in (birthYearStats.top_youth_companies?.slice(0, 8) || [])"
+                    :key="comp.company"
+                    @click="searchKeyword = comp.company; handleSearch()"
+                    class="p-2.5 bg-slate-900/80 hover:bg-indigo-950/50 rounded-xl border border-slate-800 hover:border-indigo-600/50 transition cursor-pointer group flex flex-col justify-between">
+                    <div class="flex items-start justify-between gap-1 mb-1.5">
+                      <span class="font-mono text-[10px] text-slate-500 group-hover:text-indigo-400 font-bold">#0[[ cIdx + 1 ]]</span>
+                      <span class="font-mono text-emerald-400 font-bold text-xs">[[ comp.count ]] 人</span>
+                    </div>
+                    <div class="text-slate-300 group-hover:text-white font-medium text-xs truncate" :title="comp.company">
+                      [[ comp.company ]]
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
 
@@ -1058,8 +1806,26 @@
           <table class="min-w-full text-left text-xs border-collapse whitespace-nowrap">
             <thead class="bg-slate-900/90 border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider select-none sticky top-0 z-10 backdrop-blur-sm">
               <tr>
-                <th v-for="col in currentColumns" :key="col.key" class="px-4 py-3 whitespace-nowrap" :class="col.headerClass || ''">
-                  [[ col.label ]]
+                <th
+                  v-for="col in currentColumns"
+                  :key="col.key"
+                  class="px-4 py-3 whitespace-nowrap"
+                  :class="[
+                    col.headerClass || '',
+                    (col.key === 'birth_date' || col.key === 'publish_date') && currentSubTab.endpoint === '/api/v1/extensions/talent-notices' ? 'cursor-pointer select-none hover:text-white transition group/sort' : ''
+                  ]"
+                  @click="toggleTalentSort(col.key)"
+                  :title="(col.key === 'birth_date' || col.key === 'publish_date') && currentSubTab.endpoint === '/api/v1/extensions/talent-notices' ? '点击切换按【' + col.label + '】升序/降序' : ''">
+                  <div class="inline-flex items-center gap-1.5">
+                    <span>[[ col.label ]]</span>
+                    <template v-if="(col.key === 'birth_date' || col.key === 'publish_date') && currentSubTab.endpoint === '/api/v1/extensions/talent-notices'">
+                      <span v-if="talentSortBy === col.key" class="text-indigo-400 font-bold">
+                        <i v-if="talentSortOrder === 'desc'" class="fa-solid fa-arrow-down-wide-short text-xs"></i>
+                        <i v-else class="fa-solid fa-arrow-up-short-wide text-xs"></i>
+                      </span>
+                      <i v-else class="fa-solid fa-sort text-slate-600 group-hover/sort:text-slate-400 text-xs transition"></i>
+                    </template>
+                  </div>
                 </th>
                 <th class="px-4 py-3 text-right whitespace-nowrap sticky right-0 bg-slate-900 z-20 border-l border-slate-800/80 shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.5)]">
                   操作
@@ -1240,28 +2006,28 @@
         <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-850">
           <div class="flex items-center space-x-3.5 min-w-0">
             <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-600/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30 flex-shrink-0">
-              <i :class="detailRow.person_name ? 'fa-solid fa-user-graduate text-base' : (detailRow.position_title ? 'fa-solid fa-briefcase text-base' : 'fa-solid fa-circle-info text-base')"></i>
+              <i :class="detailRow && detailRow.person_name ? 'fa-solid fa-user-graduate text-base' : (detailRow && detailRow.position_title ? 'fa-solid fa-briefcase text-base' : ((detailRow && detailRow.author_username === 'trq212') ? 'fa-brands fa-x-twitter text-sky-400 text-base' : 'fa-solid fa-circle-info text-base'))"></i>
             </div>
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2 flex-wrap">
-                <h3 class="text-sm font-bold text-white truncate max-w-md" :title="detailRow.person_name ? ('人才公示 · ' + detailRow.person_name) : (detailRow.position_title ? ('岗位详情 · ' + detailRow.position_title) : '业务记录详情查看')">
-                  [[ detailRow.person_name ? ('人才公示 · ' + detailRow.person_name) : (detailRow.position_title ? ('岗位详情 · ' + detailRow.position_title) : '业务记录详情查看') ]]
+                <h3 class="text-sm font-bold text-white truncate max-w-md" :title="detailTitle">
+                  [[ detailTitle ]]
                 </h3>
-                <span v-if="detailRow.gender" class="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300 border border-slate-700 flex-shrink-0">
+                <span v-if="detailRow && detailRow.gender" class="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300 border border-slate-700 flex-shrink-0">
                   [[ detailRow.gender ]]
                 </span>
-                <span v-if="detailRow.level_code_name" class="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-500/10 text-amber-300 border border-amber-500/20 flex-shrink-0">
+                <span v-if="detailRow && detailRow.level_code_name" class="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-500/10 text-amber-300 border border-amber-500/20 flex-shrink-0">
                   [[ detailRow.level_code_name ]]
                 </span>
-                <span v-else-if="detailRow.category" class="px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 flex-shrink-0">
+                <span v-else-if="detailRow && detailRow.category" class="px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 flex-shrink-0">
                   [[ detailRow.category ]]
                 </span>
-                <span v-if="detailRow.salary_range" class="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-500/10 text-amber-300 border border-amber-500/20 flex-shrink-0">
+                <span v-if="detailRow && detailRow.salary_range" class="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-500/10 text-amber-300 border border-amber-500/20 flex-shrink-0">
                   [[ detailRow.salary_range ]]
                 </span>
               </div>
-              <p class="text-[11px] text-slate-400 font-mono mt-0.5 truncate">
-                [[ detailRow.person_name ? ((detailRow.work_unit || '') + (detailRow.accept_dept ? ' · ' + detailRow.accept_dept : '')) : (detailRow.company_name ? (detailRow.company_name + (detailRow.location ? ' · ' + detailRow.location : '')) : (detailRow.title || detailRow.public_id || detailRow.notice_id || detailRow.record_id || detailRow.repo_name || '业务记录详情')) ]]
+              <p class="text-[11px] text-slate-400 font-mono mt-0.5 truncate" :title="detailSubtitle">
+                [[ detailSubtitle ]]
               </p>
             </div>
           </div>
@@ -1459,6 +2225,76 @@
             </div>
           </template>
 
+          <!-- 前沿技术 (Twitter / trq212) 专属推文详情卡片 -->
+          <template v-else-if="detailRow.author_username === 'trq212' || detailRow.tweet_id">
+            <div class="bg-slate-950/70 p-4 rounded-xl border border-sky-500/20 space-y-4">
+              <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-sky-400 to-indigo-600 flex items-center justify-center font-bold text-white shadow-md shadow-sky-500/20">
+                    <i class="fa-brands fa-x-twitter text-lg"></i>
+                  </div>
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <span class="text-sm font-bold text-white">[[ detailRow.author_name || 'Thariq' ]]</span>
+                      <span class="text-xs text-slate-400 font-mono">@[[ detailRow.author_username || 'trq212' ]]</span>
+                      <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">Claude Code</span>
+                    </div>
+                    <div class="text-[11px] text-slate-500 font-mono mt-0.5">
+                      发布于: [[ detailRow.published_at || (detailRow.metrics && detailRow.metrics.raw_date) || '-' ]]
+                    </div>
+                  </div>
+                </div>
+                <a
+                  :href="detailRow.tweet_url || 'https://x.com/trq212'"
+                  target="_blank"
+                  class="px-3 py-1.5 bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 rounded-lg text-xs font-medium inline-flex items-center gap-1.5 transition">
+                  <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                  <span>原推文链接</span>
+                </a>
+              </div>
+
+              <!-- 推文内容中文 (高亮首选展示) -->
+              <div class="space-y-1.5 p-3.5 bg-gradient-to-br from-amber-950/20 via-slate-900/40 to-slate-900/60 rounded-xl border border-amber-500/30 shadow-sm">
+                <div class="flex items-center justify-between text-xs text-amber-300 font-bold tracking-wide">
+                  <span class="inline-flex items-center gap-1.5">
+                    <i class="fa-solid fa-language text-amber-400 text-sm"></i>
+                    推文内容中文 (译文)
+                  </span>
+                  <button
+                    v-if="detailRow.content_zh"
+                    @click="copyTextToClipboard(detailRow.content_zh, '已复制推文中文')"
+                    class="text-[11px] text-amber-400/80 hover:text-amber-300 transition-colors inline-flex items-center gap-1 cursor-pointer">
+                    <i class="fa-regular fa-copy"></i>
+                    复制中文
+                  </button>
+                </div>
+                <div class="text-sm text-amber-100/95 leading-relaxed font-sans whitespace-pre-wrap select-text pt-1">
+                  [[ detailRow.content_zh || '暂无中文翻译（可点击上方原推链接查看）' ]]
+                </div>
+              </div>
+
+              <!-- 推文完整正文 (英文原推) -->
+              <div class="space-y-1.5 p-3.5 bg-slate-900/60 rounded-xl border border-slate-800/80">
+                <div class="flex items-center justify-between text-xs text-slate-400 font-semibold">
+                  <span class="inline-flex items-center gap-1.5">
+                    <i class="fa-brands fa-x-twitter text-slate-400"></i>
+                    推文原文 (English)
+                  </span>
+                  <button
+                    v-if="detailRow.content"
+                    @click="copyTextToClipboard(detailRow.content, '已复制推文原文')"
+                    class="text-[11px] text-slate-400 hover:text-slate-200 transition-colors inline-flex items-center gap-1 cursor-pointer">
+                    <i class="fa-regular fa-copy"></i>
+                    复制原文
+                  </button>
+                </div>
+                <div class="text-sm text-slate-200 leading-relaxed font-sans whitespace-pre-wrap select-text pt-1">
+                  [[ detailRow.content || '-' ]]
+                </div>
+              </div>
+            </div>
+          </template>
+
           <!-- 通用非岗位非人才记录布局 (原有渲染逻辑) -->
           <template v-else>
             <!-- 属性键值列表 -->
@@ -1514,6 +2350,16 @@
                 class="px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-medium inline-flex items-center gap-1.5 transition">
                 <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
                 查看官方源站公示
+              </a>
+            </template>
+            <!-- 前沿技术专属操作 -->
+            <template v-else-if="detailRow.author_username === 'trq212' || detailRow.tweet_id">
+              <a
+                :href="detailRow.tweet_url || 'https://x.com/trq212'"
+                target="_blank"
+                class="px-3 py-1.5 bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 rounded-lg text-xs font-medium inline-flex items-center gap-1.5 transition">
+                <i class="fa-brands fa-x-twitter text-sm"></i>
+                前往 X 查看原帖
               </a>
             </template>
             <span v-else class="text-[11px] text-slate-500 font-mono">
@@ -2315,6 +3161,51 @@
         const searchKeyword = ref('');
         const filterDate = ref('');
         const filterCategory = ref('');
+        const talentSortBy = ref('publish_date');
+        const talentSortOrder = ref('desc');
+        const filterBirthYear = ref('');
+        const talentSortCombined = computed({
+          get: () => `${talentSortBy.value}_${talentSortOrder.value}`,
+          set: (val) => {
+            if (val === 'birth_date_desc') {
+              talentSortBy.value = 'birth_date';
+              talentSortOrder.value = 'desc';
+            } else if (val === 'birth_date_asc') {
+              talentSortBy.value = 'birth_date';
+              talentSortOrder.value = 'asc';
+            } else if (val === 'publish_date_asc') {
+              talentSortBy.value = 'publish_date';
+              talentSortOrder.value = 'asc';
+            } else {
+              talentSortBy.value = 'publish_date';
+              talentSortOrder.value = 'desc';
+            }
+          }
+        });
+
+        const handleTalentSortChange = () => {
+          pagination.value.page = 1;
+          loadData();
+          const label = talentSortBy.value === 'birth_date'
+            ? (talentSortOrder.value === 'desc' ? '按出生年月倒序 (年轻人才优先)' : '按出生年月正序 (年长人才优先)')
+            : (talentSortOrder.value === 'desc' ? '按发布日期倒序' : '按发布日期正序');
+          showToast('排序已更新', label, 'info', 2000);
+        };
+
+        const toggleTalentSort = (colKey) => {
+          if (currentSubTab.value?.endpoint !== '/api/v1/extensions/talent-notices') return;
+          if (colKey !== 'birth_date' && colKey !== 'publish_date') return;
+          if (talentSortBy.value === colKey) {
+            talentSortOrder.value = talentSortOrder.value === 'desc' ? 'asc' : 'desc';
+          } else {
+            talentSortBy.value = colKey;
+            talentSortOrder.value = 'desc';
+          }
+          pagination.value.page = 1;
+          loadData();
+          const colName = colKey === 'birth_date' ? '出生年月' : '发布日期';
+          showToast('排序切换', `当前按【${colName}】${talentSortOrder.value === 'desc' ? '倒序' : '正序'}排列`, 'info', 2000);
+        };
         const items = ref([]);
         const detailVisible = ref(false);
         const detailRow = ref({});
@@ -3173,6 +4064,29 @@
           timeline: []
         });
 
+        // 杭州人才出生年份维度分析状态
+        const hzBirthYearChartEl = ref(null);
+        const hzDecadePieEl = ref(null);
+        const hzLevelPieEl = ref(null);
+        let hzBirthYearChartInstance = null;
+        let hzDecadePieInstance = null;
+        let hzLevelPieInstance = null;
+        const birthYearChartType = ref('level'); // 'level' | 'level_e' | 'level_d' | 'level_c' | 'level_b' | 'high_level' | 'lines' | 'bar' | 'gender'
+        const birthYearRightTab = ref('decade'); // 'decade' | 'level'
+        const birthYearShowTable = ref(false); // 是否展开逐年明细数据对比表
+        const birthYearTableSortField = ref('year');
+        const birthYearTableSortOrder = ref('desc'); // 'desc' | 'asc'
+        const birthYearStatsLoading = ref(false);
+        const birthYearStats = ref({
+          total_records: 0,
+          kpis: {},
+          level_stats: {},
+          timeline: [],
+          decade_summary: [],
+          broad_summary: [],
+          top_youth_companies: []
+        });
+
         // 12 大业务模块配置与数据字段映射 (按照 1.芯片半导体, 2.人才申报公示, 3.规约管理, 其余按名称排序)
         const menus = [
           // 1. 芯片半导体 (截图 1)
@@ -3712,6 +4626,30 @@
                 ]
               }
             ]
+          },
+
+          // 14. 前沿技术 (X @trq212 Claude Code 专家动态)
+          {
+            id: 'frontier_tech',
+            label: '前沿技术',
+            icon: 'fa-solid fa-atom',
+            statKey: 'frontier_tech_total',
+            subTabs: [
+              {
+                name: 'trq212 动态推文',
+                endpoint: '/api/v1/extensions/frontier-tech',
+                searchPlaceholder: '搜索推文内容、中文翻译、关键词、主题标签...',
+                columns: [
+                  { key: 'id', label: '序号', cellClass: 'font-mono text-slate-400 w-14 text-center' },
+                  { key: 'content_zh', label: '推文内容中文', truncate: true, cellClass: 'font-normal text-amber-200/95 max-w-md' },
+                  { key: 'content', label: '推文原文 (EN)', truncate: true, cellClass: 'font-normal text-slate-300 max-w-sm' },
+                  { key: 'author_name', label: '作者昵称', cellClass: 'font-semibold text-sky-300' },
+                  { key: 'author_username', label: '作者Handle', cellClass: 'font-mono text-slate-400' },
+                  { key: 'metrics', label: '发布时间/标记', cellClass: 'font-mono text-amber-300' },
+                  { key: 'tweet_url', label: '推文外链', type: 'link' }
+                ]
+              }
+            ]
           }
         ];
 
@@ -3751,7 +4689,9 @@
               rules_total: data.rules?.total_rules || 0,
               schedules_total: data.schedules?.total_schedules || 0,
               bitcoin_total: data.bitcoin?.mining_runs || 0,
-              qcc_bids_total: data.qcc_bids?.total_bids || 0
+              qcc_bids_total: data.qcc_bids?.total_bids || 0,
+              frontier_tech_total: data.frontier_tech?.total_posts || 0,
+              frontier_tech_translated: data.frontier_tech?.translated_posts || 0
             };
           } catch (err) {
             console.error('Failed fetching stats:', err);
@@ -3768,13 +4708,24 @@
             if (searchKeyword.value.trim()) {
               url.searchParams.set('keyword', searchKeyword.value.trim());
             }
-            // 针对人才公示专属单独筛选 (日期与分类)
+            // 针对人才公示专属单独筛选 (日期、分类、排序、出生年份)
             if (currentSubTab.value.endpoint === '/api/v1/extensions/talent-notices' || currentSubTab.value.endpoint === '/api/v1/extensions/hf-talent-records') {
               if (filterDate.value) {
                 url.searchParams.set('publish_date', filterDate.value);
               }
               if (filterCategory.value.trim()) {
                 url.searchParams.set(currentSubTab.value.endpoint === '/api/v1/extensions/talent-notices' ? 'category' : 'level_code_name', filterCategory.value.trim());
+              }
+              if (currentSubTab.value.endpoint === '/api/v1/extensions/talent-notices') {
+                if (talentSortBy.value) {
+                  url.searchParams.set('sort_by', talentSortBy.value);
+                }
+                if (talentSortOrder.value) {
+                  url.searchParams.set('order', talentSortOrder.value);
+                }
+                if (filterBirthYear.value) {
+                  url.searchParams.set('birth_year', filterBirthYear.value.trim());
+                }
               }
             }
 
@@ -3815,6 +4766,7 @@
               if (!endpoint || endpoint === '/api/v1/extensions/talent-notices') {
                 fetchCompanyStats();
                 fetchDateStats();
+                fetchBirthYearStats();
               } else if (endpoint === '/api/v1/extensions/hf-talent-records') {
                 activeAnalyticsTab.value = 'date';
                 fetchDateStats();
@@ -3876,6 +4828,7 @@
           searchKeyword.value = '';
           filterDate.value = '';
           filterCategory.value = '';
+          filterBirthYear.value = '';
           selectedCompanyFilter.value = '';
 
           if (pushHistory) {
@@ -3893,6 +4846,7 @@
           searchKeyword.value = '';
           filterDate.value = '';
           filterCategory.value = '';
+          filterBirthYear.value = '';
           selectedCompanyFilter.value = '';
 
           if (pushHistory) {
@@ -3904,6 +4858,7 @@
           if (tab.endpoint === '/api/v1/extensions/talent-notices') {
             fetchCompanyStats();
             fetchDateStats();
+            fetchBirthYearStats();
           } else if (tab.endpoint === '/api/v1/extensions/hf-talent-records') {
             activeAnalyticsTab.value = 'date';
             fetchDateStats();
@@ -4067,6 +5022,9 @@
           searchKeyword.value = '';
           filterDate.value = '';
           filterCategory.value = '';
+          filterBirthYear.value = '';
+          talentSortBy.value = 'publish_date';
+          talentSortOrder.value = 'desc';
           selectedCompanyFilter.value = '';
           pagination.value.page = 1;
           loadData();
@@ -4570,11 +5528,17 @@
           nextTick(() => {
             if (tab === 'company') {
               renderAllCharts();
-            } else {
+            } else if (tab === 'date') {
               if (!dateStats.value.timeline || dateStats.value.timeline.length === 0) {
                 fetchDateStats();
               } else {
                 renderDateCharts();
+              }
+            } else if (tab === 'birth_year') {
+              if (!birthYearStats.value.timeline || birthYearStats.value.timeline.length === 0) {
+                fetchBirthYearStats();
+              } else {
+                renderBirthYearCharts();
               }
             }
           });
@@ -4595,6 +5559,743 @@
           pagination.value.page = 1;
           loadData();
           showToast('日期筛选已联动', `已快速筛选【${dateStr}】的人才公示数据`, 'info', 2500);
+        };
+
+        // --------------------------------------------------------
+        // 3. 杭州人才出生年份维度统计与图表 (birth_year)
+        // --------------------------------------------------------
+        const fetchBirthYearStats = async () => {
+          birthYearStatsLoading.value = true;
+          try {
+            const url = new URL('/api/v1/extensions/talent-notices/birth-year-stats', window.location.origin);
+            const resp = await fetch(url.toString());
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            birthYearStats.value = data;
+            nextTick(() => {
+              if (activeAnalyticsTab.value === 'birth_year') {
+                renderBirthYearCharts();
+              }
+            });
+          } catch (err) {
+            console.error('Failed to fetch birth year stats:', err);
+          } finally {
+            birthYearStatsLoading.value = false;
+          }
+        };
+
+        // 计算逐年明细数据排序
+        const sortedBirthYearTimeline = computed(() => {
+          const list = [...(birthYearStats.value.timeline || [])];
+          const field = birthYearTableSortField.value;
+          const order = birthYearTableSortOrder.value;
+          return list.sort((a, b) => {
+            let va = a[field] ?? 0;
+            let vb = b[field] ?? 0;
+            if (field === 'high_level') {
+              va = (a.b_count || 0) + (a.c_count || 0) + (a.d_count || 0);
+              vb = (b.b_count || 0) + (b.c_count || 0) + (b.d_count || 0);
+            }
+            return order === 'desc' ? (vb - va) : (va - vb);
+          });
+        });
+
+        const toggleBirthYearTableSort = (field) => {
+          if (birthYearTableSortField.value === field) {
+            birthYearTableSortOrder.value = birthYearTableSortOrder.value === 'desc' ? 'asc' : 'desc';
+          } else {
+            birthYearTableSortField.value = field;
+            birthYearTableSortOrder.value = 'desc';
+          }
+        };
+
+        const filterByBirthYearAndCategory = (year, cat) => {
+          if (year) filterBirthYear.value = String(year);
+          if (cat) filterCategory.value = String(cat);
+          pagination.value.page = 1;
+          loadData();
+          showToast('精准下钻联动', `已快速筛选【${year ? year + '年' : ''}${cat ? ' · ' + cat : ''}】申报人才`, 'info', 2500);
+        };
+
+        const renderBirthYearTrendChart = () => {
+          if (!hzBirthYearChartEl.value || typeof echarts === 'undefined') return;
+          hzBirthYearChartInstance = getOrInitChart(hzBirthYearChartInstance, hzBirthYearChartEl.value);
+          if (!hzBirthYearChartInstance) return;
+          hzBirthYearChartInstance.off('click');
+          hzBirthYearChartInstance.on('click', (params) => {
+            if (!params) return;
+            const yearStr = params.name;
+            const seriesName = params.seriesName || '';
+            let cat = '';
+            if (birthYearChartType.value === 'level_e' || seriesName.includes('E类')) {
+              cat = 'E类';
+            } else if (birthYearChartType.value === 'level_d' || seriesName.includes('D类')) {
+              cat = 'D类';
+            } else if (birthYearChartType.value === 'level_c' || seriesName.includes('C类')) {
+              cat = 'C类';
+            } else if (birthYearChartType.value === 'level_b' || seriesName.includes('B类')) {
+              cat = 'B类';
+            }
+            if (cat) {
+              filterByBirthYearAndCategory(yearStr, cat);
+            } else {
+              filterByBirthYear(yearStr);
+            }
+          });
+
+          const timeline = birthYearStats.value.timeline || [];
+          const years = timeline.map(t => String(t.year));
+          const totalCounts = timeline.map(t => t.count);
+          const maleCounts = timeline.map(t => t.male);
+          const femaleCounts = timeline.map(t => t.female);
+          const bCounts = timeline.map(t => t.b_count);
+          const cCounts = timeline.map(t => t.c_count);
+          const dCounts = timeline.map(t => t.d_count);
+          const eCounts = timeline.map(t => t.e_count);
+          const highLevelCounts = timeline.map(t => (t.b_count || 0) + (t.c_count || 0) + (t.d_count || 0));
+
+          let series = [];
+          let yAxisConfig = {
+            type: 'value',
+            splitLine: { lineStyle: { color: '#1e293b', type: 'dashed' } },
+            axisLabel: { color: '#64748b', fontSize: 10 }
+          };
+
+          const ct = birthYearChartType.value;
+
+          if (ct === 'level_e') {
+            // 聚焦 E类 (高级人才) 逐年分布
+            series = [
+              {
+                name: 'E类高级人才申报数',
+                type: 'bar',
+                barMaxWidth: 22,
+                itemStyle: {
+                  borderRadius: [4, 4, 0, 0],
+                  color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: '#38bdf8' },
+                    { offset: 1, color: '#0284c7' }
+                  ])
+                },
+                markPoint: {
+                  data: [{ type: 'max', name: '最高峰值' }],
+                  itemStyle: { color: '#0284c7' }
+                },
+                data: eCounts
+              },
+              {
+                name: 'E类走势曲线',
+                type: 'line',
+                smooth: true,
+                showSymbol: false,
+                itemStyle: { color: '#38bdf8' },
+                lineStyle: { width: 2.5 },
+                areaStyle: {
+                  color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: 'rgba(56, 189, 248, 0.35)' },
+                    { offset: 1, color: 'rgba(56, 189, 248, 0.01)' }
+                  ])
+                },
+                data: eCounts
+              }
+            ];
+          } else if (ct === 'level_d') {
+            // 聚焦 D类 (市级领军人才) 逐年分布
+            series = [
+              {
+                name: 'D类市级领军申报数',
+                type: 'bar',
+                barMaxWidth: 22,
+                itemStyle: {
+                  borderRadius: [4, 4, 0, 0],
+                  color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: '#c084fc' },
+                    { offset: 1, color: '#7e22ce' }
+                  ])
+                },
+                markPoint: {
+                  data: [{ type: 'max', name: '最高峰值' }],
+                  itemStyle: { color: '#9333ea' }
+                },
+                data: dCounts
+              },
+              {
+                name: 'D类走势曲线',
+                type: 'line',
+                smooth: true,
+                showSymbol: false,
+                itemStyle: { color: '#a855f7' },
+                lineStyle: { width: 2.5 },
+                areaStyle: {
+                  color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: 'rgba(168, 85, 247, 0.35)' },
+                    { offset: 1, color: 'rgba(168, 85, 247, 0.01)' }
+                  ])
+                },
+                data: dCounts
+              }
+            ];
+          } else if (ct === 'level_c') {
+            // 聚焦 C类 (省级领军人才) 逐年分布
+            series = [
+              {
+                name: 'C类省级领军申报数',
+                type: 'bar',
+                barMaxWidth: 22,
+                itemStyle: {
+                  borderRadius: [4, 4, 0, 0],
+                  color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: '#fb923c' },
+                    { offset: 1, color: '#c2410c' }
+                  ])
+                },
+                markPoint: {
+                  data: [{ type: 'max', name: '最高峰值' }],
+                  itemStyle: { color: '#ea580c' }
+                },
+                data: cCounts
+              },
+              {
+                name: 'C类走势曲线',
+                type: 'line',
+                smooth: true,
+                showSymbol: false,
+                itemStyle: { color: '#f97316' },
+                lineStyle: { width: 2.5 },
+                areaStyle: {
+                  color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: 'rgba(249, 115, 22, 0.35)' },
+                    { offset: 1, color: 'rgba(249, 115, 22, 0.01)' }
+                  ])
+                },
+                data: cCounts
+              }
+            ];
+          } else if (ct === 'level_b') {
+            // 聚焦 B类 (国家级领军人才) 逐年分布
+            series = [
+              {
+                name: 'B类国家级领军申报数',
+                type: 'bar',
+                barMaxWidth: 22,
+                itemStyle: {
+                  borderRadius: [4, 4, 0, 0],
+                  color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: '#fcd34d' },
+                    { offset: 1, color: '#b45309' }
+                  ])
+                },
+                markPoint: {
+                  data: [{ type: 'max', name: '最高峰值' }],
+                  itemStyle: { color: '#d97706' }
+                },
+                data: bCounts
+              },
+              {
+                name: 'B类走势曲线',
+                type: 'line',
+                smooth: true,
+                showSymbol: false,
+                itemStyle: { color: '#f59e0b' },
+                lineStyle: { width: 2.5 },
+                areaStyle: {
+                  color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: 'rgba(245, 158, 11, 0.35)' },
+                    { offset: 1, color: 'rgba(245, 158, 11, 0.01)' }
+                  ])
+                },
+                data: bCounts
+              }
+            ];
+          } else if (ct === 'high_level') {
+            // 高层级 (B/C/D类) 梯队堆叠对比 (剥离E类巨额体量)
+            series = [
+              {
+                name: 'B类 (国家级)',
+                type: 'bar',
+                stack: 'high_level',
+                barMaxWidth: 20,
+                itemStyle: { color: '#f59e0b' },
+                data: bCounts
+              },
+              {
+                name: 'C类 (省级领军)',
+                type: 'bar',
+                stack: 'high_level',
+                barMaxWidth: 20,
+                itemStyle: { color: '#f97316' },
+                data: cCounts
+              },
+              {
+                name: 'D类 (市级领军)',
+                type: 'bar',
+                stack: 'high_level',
+                barMaxWidth: 20,
+                itemStyle: { color: '#a855f7' },
+                data: dCounts
+              },
+              {
+                name: '高层级合计走势',
+                type: 'line',
+                smooth: true,
+                showSymbol: false,
+                itemStyle: { color: '#fbbf24' },
+                lineStyle: { width: 2.5 },
+                data: highLevelCounts
+              }
+            ];
+          } else if (ct === 'lines') {
+            // 四类多线走势对比 (双 Y 轴: 左轴 E类，右轴 B/C/D 类)
+            yAxisConfig = [
+              {
+                type: 'value',
+                name: 'E类 (人)',
+                splitLine: { lineStyle: { color: '#1e293b', type: 'dashed' } },
+                axisLabel: { color: '#38bdf8', fontSize: 10 },
+                nameTextStyle: { color: '#38bdf8', fontSize: 10 }
+              },
+              {
+                type: 'value',
+                name: 'B/C/D类 (人)',
+                splitLine: { show: false },
+                axisLabel: { color: '#f59e0b', fontSize: 10 },
+                nameTextStyle: { color: '#f59e0b', fontSize: 10 }
+              }
+            ];
+            series = [
+              {
+                name: 'E类 (高级人才)',
+                type: 'line',
+                yAxisIndex: 0,
+                smooth: true,
+                showSymbol: false,
+                itemStyle: { color: '#38bdf8' },
+                lineStyle: { width: 2.5 },
+                data: eCounts
+              },
+              {
+                name: 'D类 (市级领军)',
+                type: 'line',
+                yAxisIndex: 1,
+                smooth: true,
+                showSymbol: false,
+                itemStyle: { color: '#a855f7' },
+                lineStyle: { width: 2.5 },
+                data: dCounts
+              },
+              {
+                name: 'C类 (省级领军)',
+                type: 'line',
+                yAxisIndex: 1,
+                smooth: true,
+                showSymbol: false,
+                itemStyle: { color: '#f97316' },
+                lineStyle: { width: 2.5 },
+                data: cCounts
+              },
+              {
+                name: 'B类 (国家级)',
+                type: 'line',
+                yAxisIndex: 1,
+                smooth: true,
+                showSymbol: false,
+                itemStyle: { color: '#f59e0b' },
+                lineStyle: { width: 2.5 },
+                data: bCounts
+              }
+            ];
+          } else if (ct === 'gender') {
+            // 男女堆叠
+            series = [
+              {
+                name: '男性申报人',
+                type: 'bar',
+                stack: 'total',
+                barMaxWidth: 20,
+                itemStyle: { color: '#6366f1' },
+                data: maleCounts
+              },
+              {
+                name: '女性申报人',
+                type: 'bar',
+                stack: 'total',
+                barMaxWidth: 20,
+                itemStyle: { color: '#ec4899' },
+                data: femaleCounts
+              },
+              {
+                name: '申报走势',
+                type: 'line',
+                smooth: true,
+                showSymbol: false,
+                itemStyle: { color: '#38bdf8' },
+                lineStyle: { width: 2.5 },
+                data: totalCounts
+              }
+            ];
+          } else if (ct === 'bar') {
+            // 申报总量
+            series = [
+              {
+                name: '申报人才总数',
+                type: 'bar',
+                barMaxWidth: 22,
+                itemStyle: {
+                  borderRadius: [4, 4, 0, 0],
+                  color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: '#818cf8' },
+                    { offset: 1, color: '#4338ca' }
+                  ])
+                },
+                data: totalCounts
+              },
+              {
+                name: '走势曲线',
+                type: 'line',
+                smooth: true,
+                showSymbol: false,
+                itemStyle: { color: '#fbbf24' },
+                lineStyle: { width: 2.5 },
+                data: totalCounts
+              }
+            ];
+          } else {
+            // 默认: 'level' (B/C/D/E 四大层级全量堆叠)
+            series = [
+              {
+                name: 'B类 (国家级)',
+                type: 'bar',
+                stack: 'level',
+                barMaxWidth: 20,
+                itemStyle: { color: '#f59e0b' },
+                data: bCounts
+              },
+              {
+                name: 'C类 (省级领军)',
+                type: 'bar',
+                stack: 'level',
+                barMaxWidth: 20,
+                itemStyle: { color: '#f97316' },
+                data: cCounts
+              },
+              {
+                name: 'D类 (市级领军)',
+                type: 'bar',
+                stack: 'level',
+                barMaxWidth: 20,
+                itemStyle: { color: '#a855f7' },
+                data: dCounts
+              },
+              {
+                name: 'E类 (高级人才)',
+                type: 'bar',
+                stack: 'level',
+                barMaxWidth: 20,
+                itemStyle: { color: '#38bdf8' },
+                data: eCounts
+              }
+            ];
+          }
+
+          const option = {
+            backgroundColor: 'transparent',
+            tooltip: {
+              trigger: 'axis',
+              axisPointer: { type: 'shadow' },
+              backgroundColor: '#0f172a',
+              borderColor: '#334155',
+              borderWidth: 1,
+              padding: [10, 14],
+              textStyle: { color: '#f8fafc', fontSize: 12 },
+              formatter: function (params) {
+                const yearStr = params[0]?.name || '';
+                const item = timeline.find(t => String(t.year) === yearStr) || {};
+                const age = 2026 - (parseInt(yearStr) || 1990);
+                let rows = '';
+                params.forEach(p => {
+                  if (!p.seriesName.includes('曲线') && !p.seriesName.includes('走势')) {
+                    rows += `<div style="display:flex;justify-content:space-between;align-items:center;gap:16px;margin:3px 0;">
+                      <span style="display:flex;align-items:center;gap:6px;">${p.marker} ${p.seriesName}</span>
+                      <span style="font-family:monospace;font-weight:bold;">${p.value} 人</span>
+                    </div>`;
+                  }
+                });
+                return `
+                  <div style="font-weight:bold;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #334155;color:#fff;font-size:12px;">
+                    🎂 ${yearStr}年 出生人才画像 (约${age}岁)
+                  </div>
+                  <div style="margin:4px 0;font-size:11px;color:#94a3b8;display:flex;justify-content:space-between;">
+                    <span>当年总申报人数:</span>
+                    <span style="font-family:monospace;font-weight:bold;color:#a5b4fc;">${item.count || 0} 人</span>
+                  </div>
+                  <div style="margin:2px 0;font-size:11px;color:#94a3b8;display:flex;justify-content:space-between;">
+                    <span>各层级分布:</span>
+                    <span style="font-family:monospace;">
+                      <span style="color:#f59e0b;">B:${item.b_count||0}</span> ·
+                      <span style="color:#f97316;">C:${item.c_count||0}</span> ·
+                      <span style="color:#a855f7;">D:${item.d_count||0}</span> ·
+                      <span style="color:#38bdf8;">E:${item.e_count||0}</span>
+                    </span>
+                  </div>
+                  <div style="margin:2px 0;font-size:11px;color:#94a3b8;display:flex;justify-content:space-between;">
+                    <span>性别构成:</span>
+                    <span style="font-family:monospace;">男 ${item.male || 0} / 女 ${item.female || 0}</span>
+                  </div>
+                  ${rows ? '<div style="margin-top:4px;padding-top:4px;border-top:1px dashed #334155;">' + rows + '</div>' : ''}
+                  <div style="margin-top:6px;font-size:10px;color:#fbbf24;text-align:right;">
+                    💡 点击柱体直接联动筛选该年份/类别申报人
+                  </div>
+                `;
+              }
+            },
+            legend: {
+              top: '0%',
+              right: '2%',
+              itemWidth: 12,
+              itemHeight: 12,
+              textStyle: { color: '#cbd5e1', fontSize: 11 }
+            },
+            grid: {
+              left: '2%',
+              right: ct === 'lines' ? '4%' : '3%',
+              top: '12%',
+              bottom: '6%',
+              containLabel: true
+            },
+            xAxis: {
+              type: 'category',
+              data: years,
+              axisLine: { lineStyle: { color: '#334155' } },
+              axisLabel: {
+                color: '#94a3b8',
+                fontSize: 10,
+                interval: 1,
+                rotate: 35
+              }
+            },
+            yAxis: yAxisConfig,
+            series: series
+          };
+
+          hzBirthYearChartInstance.setOption(option, true);
+          hzBirthYearChartInstance.resize();
+        };
+
+        const renderDecadePieChart = () => {
+          if (!hzDecadePieEl.value || typeof echarts === 'undefined') return;
+          hzDecadePieInstance = getOrInitChart(hzDecadePieInstance, hzDecadePieEl.value);
+          if (!hzDecadePieInstance) return;
+          hzDecadePieInstance.off('click');
+          hzDecadePieInstance.on('click', (params) => {
+            if (params && params.data && params.data.decadeKey) {
+              filterByBirthYear(params.data.decadeKey);
+            }
+          });
+
+          const decades = birthYearStats.value.decade_summary || [];
+          const colors = ['#10b981', '#6366f1', '#3b82f6', '#0ea5e9', '#f59e0b', '#f97316', '#a855f7'];
+
+          const pieData = decades.map((d, i) => ({
+            name: d.key,
+            value: d.count,
+            percentage: d.percentage,
+            decadeKey: d.key,
+            itemStyle: { color: colors[i % colors.length] }
+          }));
+
+          const option = {
+            backgroundColor: 'transparent',
+            tooltip: {
+              trigger: 'item',
+              backgroundColor: '#0f172a',
+              borderColor: '#334155',
+              borderWidth: 1,
+              padding: [8, 12],
+              textStyle: { color: '#f8fafc', fontSize: 11 },
+              formatter: function (p) {
+                return `
+                  <div style="font-weight:bold;margin-bottom:4px;color:#fff;">${p.marker} ${p.name}</div>
+                  <div style="display:flex;justify-content:space-between;gap:12px;font-size:11px;">
+                    <span style="color:#94a3b8;">人才总数:</span>
+                    <span style="font-family:monospace;font-weight:bold;color:#38bdf8;">${p.value} 人</span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;gap:12px;font-size:11px;">
+                    <span style="color:#94a3b8;">占比:</span>
+                    <span style="font-family:monospace;font-weight:bold;color:#f59e0b;">${p.percent}%</span>
+                  </div>
+                  <div style="margin-top:4px;font-size:10px;color:#fbbf24;">💡 点击扇区联动筛选该年代</div>
+                `;
+              }
+            },
+            legend: {
+              orient: 'vertical',
+              right: '2%',
+              top: 'middle',
+              itemWidth: 10,
+              itemHeight: 10,
+              textStyle: { color: '#94a3b8', fontSize: 10 },
+              formatter: function (name) {
+                const item = pieData.find(p => p.name === name);
+                return `${name} (${item ? item.percentage : 0}%)`;
+              }
+            },
+            series: [
+              {
+                name: '代际分布',
+                type: 'pie',
+                radius: ['45%', '72%'],
+                center: ['38%', '50%'],
+                avoidLabelOverlap: false,
+                itemStyle: {
+                  borderRadius: 4,
+                  borderColor: '#020617',
+                  borderWidth: 2
+                },
+                label: {
+                  show: false,
+                  position: 'center'
+                },
+                emphasis: {
+                  label: {
+                    show: true,
+                    fontSize: 12,
+                    fontWeight: 'bold',
+                    color: '#fff',
+                    formatter: '{b}\n{c}人'
+                  }
+                },
+                data: pieData
+              }
+            ]
+          };
+
+          hzDecadePieInstance.setOption(option, true);
+          hzDecadePieInstance.resize();
+        };
+
+        const renderLevelPieChart = () => {
+          if (!hzLevelPieEl.value || typeof echarts === 'undefined') return;
+          hzLevelPieInstance = getOrInitChart(hzLevelPieInstance, hzLevelPieEl.value);
+          if (!hzLevelPieInstance) return;
+          hzLevelPieInstance.off('click');
+          hzLevelPieInstance.on('click', (params) => {
+            if (params && params.data && params.data.levelKey) {
+              changeBirthYearChartType('level_' + params.data.levelKey.toLowerCase());
+              setQuickCategory(params.data.levelKey + '类');
+            }
+          });
+
+          const ls = birthYearStats.value.level_stats || {};
+          const pieData = [
+            { name: 'E类 (高级人才)', value: ls.E?.total || 2606, ratio: ls.E?.ratio || 90.1, levelKey: 'E', itemStyle: { color: '#38bdf8' } },
+            { name: 'D类 (市级领军)', value: ls.D?.total || 258, ratio: ls.D?.ratio || 8.9, levelKey: 'D', itemStyle: { color: '#a855f7' } },
+            { name: 'C类 (省级领军)', value: ls.C?.total || 25, ratio: ls.C?.ratio || 0.9, levelKey: 'C', itemStyle: { color: '#f97316' } },
+            { name: 'B类 (国家级)', value: ls.B?.total || 3, ratio: ls.B?.ratio || 0.1, levelKey: 'B', itemStyle: { color: '#f59e0b' } },
+          ];
+
+          const option = {
+            backgroundColor: 'transparent',
+            tooltip: {
+              trigger: 'item',
+              backgroundColor: '#0f172a',
+              borderColor: '#334155',
+              borderWidth: 1,
+              padding: [8, 12],
+              textStyle: { color: '#f8fafc', fontSize: 11 },
+              formatter: function (p) {
+                return `
+                  <div style="font-weight:bold;margin-bottom:4px;color:#fff;">${p.marker} ${p.name}</div>
+                  <div style="display:flex;justify-content:space-between;gap:12px;font-size:11px;">
+                    <span style="color:#94a3b8;">认定人数:</span>
+                    <span style="font-family:monospace;font-weight:bold;color:#38bdf8;">${p.value} 人</span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;gap:12px;font-size:11px;">
+                    <span style="color:#94a3b8;">有效占比:</span>
+                    <span style="font-family:monospace;font-weight:bold;color:#f59e0b;">${p.percent}%</span>
+                  </div>
+                  <div style="margin-top:4px;font-size:10px;color:#fbbf24;">💡 点击扇区联动聚焦该层级</div>
+                `;
+              }
+            },
+            legend: {
+              orient: 'vertical',
+              right: '2%',
+              top: 'middle',
+              itemWidth: 10,
+              itemHeight: 10,
+              textStyle: { color: '#94a3b8', fontSize: 10 },
+              formatter: function (name) {
+                const item = pieData.find(p => p.name === name);
+                return `${name.split(' ')[0]} (${item ? item.ratio : 0}%)`;
+              }
+            },
+            series: [
+              {
+                name: '人才层级结构',
+                type: 'pie',
+                radius: ['45%', '72%'],
+                center: ['38%', '50%'],
+                avoidLabelOverlap: false,
+                itemStyle: {
+                  borderRadius: 4,
+                  borderColor: '#020617',
+                  borderWidth: 2
+                },
+                label: {
+                  show: false,
+                  position: 'center'
+                },
+                emphasis: {
+                  label: {
+                    show: true,
+                    fontSize: 12,
+                    fontWeight: 'bold',
+                    color: '#fff',
+                    formatter: '{b}\n{c}人'
+                  }
+                },
+                data: pieData
+              }
+            ]
+          };
+
+          hzLevelPieInstance.setOption(option, true);
+          hzLevelPieInstance.resize();
+        };
+
+        const switchBirthYearRightTab = (tab) => {
+          birthYearRightTab.value = tab;
+          nextTick(() => {
+            if (tab === 'decade') {
+              renderDecadePieChart();
+            } else {
+              renderLevelPieChart();
+            }
+          });
+        };
+
+        const renderBirthYearCharts = () => {
+          if (chartCollapsed.value) return;
+          nextTick(() => {
+            renderBirthYearTrendChart();
+            if (birthYearRightTab.value === 'decade') {
+              renderDecadePieChart();
+            } else {
+              renderLevelPieChart();
+            }
+          });
+        };
+
+        const changeBirthYearChartType = (type) => {
+          birthYearChartType.value = type;
+          renderBirthYearTrendChart();
+        };
+
+        const filterByBirthYear = (yearOrDecade) => {
+          filterBirthYear.value = String(yearOrDecade);
+          pagination.value.page = 1;
+          loadData();
+          showToast('出生年份已联动', `已快速筛选【${yearOrDecade}】申报人才`, 'info', 2500);
         };
 
         // 快捷设置分类
@@ -4674,7 +6375,15 @@
           metadata: '扩展元数据',
           author_type: '作者身份类型',
           author_id: '作者标识',
-          content: '笔记内容摘要',
+          content: '推文/内容正文',
+          content_zh: '推文内容中文',
+          tweet_id: '推文唯一ID',
+          author_username: '作者Handle',
+          author_name: '作者昵称',
+          tweet_url: '推文链接',
+          published_at: '发布时间',
+          media_urls: '媒体附件',
+          metrics: '互动数据',
           body: '笔记完整正文',
           due_at: '截止时间',
           completed_at: '完成时间',
@@ -4874,6 +6583,13 @@
             const lower = String(val).trim().toLowerCase();
             return CHINESE_DICT[lower] || val;
           }
+          if (key === 'metrics') {
+            if (!val) return '-';
+            if (typeof val === 'object') {
+              return val.raw_date || (row && row.published_at ? row.published_at.substring(0, 10) : '-');
+            }
+            return String(val);
+          }
           if (val === null || val === undefined || val === '') return '-';
           return val;
         };
@@ -4949,6 +6665,29 @@
           return range;
         });
 
+        // 详情弹窗标题与副标题安全解析
+        const detailTitle = computed(() => {
+          const r = detailRow.value || {};
+          if (r.person_name) return '人才公示 · ' + r.person_name;
+          if (r.position_title) return '岗位详情 · ' + r.position_title;
+          if (r.author_username === 'trq212' || r.tweet_id) return '前沿技术推文 · @' + (r.author_username || 'trq212');
+          return '业务记录详情查看';
+        });
+
+        const detailSubtitle = computed(() => {
+          const r = detailRow.value || {};
+          if (r.person_name) {
+            return (r.work_unit || '') + (r.accept_dept ? ' · ' + r.accept_dept : '');
+          }
+          if (r.company_name) {
+            return r.company_name + (r.location ? ' · ' + r.location : '');
+          }
+          if (r.author_username === 'trq212' || r.tweet_id) {
+            return '发布于: ' + (r.published_at || (r.metrics && r.metrics.raw_date) || '-');
+          }
+          return r.title || r.public_id || r.notice_id || r.record_id || r.repo_name || '业务记录详情';
+        });
+
         onMounted(() => {
           handleUrlRoute(true);
           window.addEventListener('popstate', () => {
@@ -4960,6 +6699,8 @@
             if (hzPieChartInstance && !(hzPieChartInstance.isDisposed && hzPieChartInstance.isDisposed())) hzPieChartInstance.resize();
             if (hzDateChartInstance && !(hzDateChartInstance.isDisposed && hzDateChartInstance.isDisposed())) hzDateChartInstance.resize();
             if (hzCityPieInstance && !(hzCityPieInstance.isDisposed && hzCityPieInstance.isDisposed())) hzCityPieInstance.resize();
+            if (hzBirthYearChartInstance && !(hzBirthYearChartInstance.isDisposed && hzBirthYearChartInstance.isDisposed())) hzBirthYearChartInstance.resize();
+            if (hzDecadePieInstance && !(hzDecadePieInstance.isDisposed && hzDecadePieInstance.isDisposed())) hzDecadePieInstance.resize();
           });
           window.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
@@ -4978,6 +6719,7 @@
           if (currentMenuId.value === 'talent') {
             fetchCompanyStats();
             fetchDateStats();
+            fetchBirthYearStats();
           }
         });
 
@@ -4995,10 +6737,18 @@
           searchKeyword,
           filterDate,
           filterCategory,
+          talentSortBy,
+          talentSortOrder,
+          filterBirthYear,
+          talentSortCombined,
+          handleTalentSortChange,
+          toggleTalentSort,
           jumpPageNum,
           visiblePages,
           detailVisible,
           detailRow,
+          detailTitle,
+          detailSubtitle,
           crawlTarget,
           crawlModalVisible,
           crawlForm,
@@ -5026,6 +6776,7 @@
           formatCellText,
           formatFieldLabel,
           formatDetailVal,
+          copyTextToClipboard,
           hzBarChartEl,
           hzPieChartEl,
           chartCollapsed,
@@ -5055,6 +6806,22 @@
           changeDateDays,
           changeDateChartType,
           filterByDate,
+          hzBirthYearChartEl,
+          hzDecadePieEl,
+          hzLevelPieEl,
+          birthYearChartType,
+          birthYearRightTab,
+          birthYearShowTable,
+          birthYearTableSortField,
+          birthYearTableSortOrder,
+          toggleBirthYearTableSort,
+          sortedBirthYearTimeline,
+          filterByBirthYearAndCategory,
+          switchBirthYearRightTab,
+          birthYearStatsLoading,
+          birthYearStats,
+          fetchBirthYearStats,
+          changeBirthYearChartType,
           jobsSyncing,
           syncBossJobs,
           jobCompanies,
