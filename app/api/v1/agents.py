@@ -1,14 +1,14 @@
 from typing import List, Optional, Any
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, or_
 from datetime import datetime
 
 from db.session import get_db
 from app.models.agent import Agent, ApiClient
-from app.schemas.agent import AgentRegister, AgentHeartbeat, AgentResponse
+from app.schemas.agent import AgentRegister, AgentHeartbeat, AgentResponse, ApiClientCreate, ApiClientResponse
 from app.schemas.pagination import PageResult, paginate_query
-from app.core.security import generate_ulid
+from app.core.security import generate_ulid, generate_token
 
 router = APIRouter(prefix="/agents", tags=["Agents & Clients"])
 
@@ -97,6 +97,43 @@ def list_api_clients(
         }
 
     return paginate_query(query, page, page_size, serialize)
+
+@router.post("/api-clients", response_model=ApiClientResponse, status_code=status.HTTP_201_CREATED)
+def create_api_client(
+    payload: ApiClientCreate,
+    db: Session = Depends(get_db)
+):
+    """创建新的 API 客户端并生成访问 Token (Raw Token 仅在创建时返回一次)"""
+    raw_token, token_h = generate_token()
+    public_id = generate_ulid("CLIENT")
+    client = ApiClient(
+        public_id=public_id,
+        name=payload.name,
+        token_hash=token_h,
+        scopes=payload.scopes,
+        created_at=datetime.utcnow()
+    )
+    db.add(client)
+    db.commit()
+    db.refresh(client)
+    
+    return {
+        "public_id": client.public_id,
+        "name": client.name,
+        "scopes": client.scopes,
+        "raw_token": raw_token,
+        "created_at": client.created_at
+    }
+
+@router.delete("/api-clients/{public_id}")
+def revoke_api_client(public_id: str, db: Session = Depends(get_db)):
+    """撤销/注销指定的 API 客户端访问权限"""
+    client = db.query(ApiClient).filter(ApiClient.public_id == public_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="API Client not found")
+    db.delete(client)
+    db.commit()
+    return {"status": "ok", "message": f"API Client {public_id} revoked successfully"}
 
 @router.get("/{public_id}", response_model=AgentResponse)
 def get_agent(public_id: str, db: Session = Depends(get_db)):

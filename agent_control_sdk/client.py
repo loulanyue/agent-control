@@ -5,6 +5,7 @@ High-level Agent Control Client.
 from typing import Dict, Any, Optional, List, Union
 import json
 import urllib.parse
+import os
 import requests
 
 from .models import (
@@ -217,7 +218,7 @@ class AgentControlClient:
         session: Optional[requests.Session] = None,
     ):
         self.base_url = base_url.rstrip("/")
-        self.api_key = api_key
+        self.api_key = api_key or os.getenv("AGENT_CONTROL_API_KEY") or os.getenv("API_KEY")
         self.timeout = timeout
         self.session = session or requests.Session()
 

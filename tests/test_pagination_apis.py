@@ -4,6 +4,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from fastapi.testclient import TestClient
 from main import app
+from app.core.config import settings
 
 client = TestClient(app)
 
@@ -39,9 +40,16 @@ def test_all_apis():
     print("Testing All Pagination APIs & Dashboard Stats...")
     print("==================================================")
     all_passed = True
+    auth_headers = {"Authorization": f"Bearer {settings.effective_api_key}"}
+
     for url, is_paginated in ENDPOINTS:
         try:
-            resp = client.get(url)
+            # 1. 验证未鉴权请求被拦截 (401)
+            unauth_resp = client.get(url)
+            assert unauth_resp.status_code == 401, f"Expected 401 for unauthenticated request to {url}, got {unauth_resp.status_code}"
+
+            # 2. 携带凭证请求正常响应 (200)
+            resp = client.get(url, headers=auth_headers)
             if resp.status_code != 200:
                 print(f"[FAIL] {url} -> Status {resp.status_code}: {resp.text}")
                 all_passed = False
@@ -60,7 +68,7 @@ def test_all_apis():
             print(f"[ERROR] {url} -> Exception: {e}")
             all_passed = False
 
-    # Test Dashboard HTML UI
+    # Test Dashboard HTML UI (无需凭据)
     print("--------------------------------------------------")
     resp_dashboard = client.get("/dashboard")
     assert resp_dashboard.status_code == 200
@@ -70,7 +78,7 @@ def test_all_apis():
     # Also test search filtering on a sample endpoint
     print("--------------------------------------------------")
     search_url = "/api/v1/extensions/github-contributions?page=1&page_size=5&keyword=fix"
-    resp_search = client.get(search_url)
+    resp_search = client.get(search_url, headers=auth_headers)
     assert resp_search.status_code == 200
     search_data = resp_search.json()
     assert "items" in search_data
@@ -78,19 +86,19 @@ def test_all_apis():
 
     # Test talent notices independent filters: date and category
     print("--------------------------------------------------")
-    resp_date = client.get("/api/v1/extensions/talent-notices?publish_date=2026-09-09&page_size=5")
+    resp_date = client.get("/api/v1/extensions/talent-notices?publish_date=2026-09-09&page_size=5", headers=auth_headers)
     assert resp_date.status_code == 200
     d_date = resp_date.json()
     assert d_date["total"] == 83
     print(f"[OK] Talent Notice by Date (2026-09-09) -> matched total={d_date['total']}")
 
-    resp_cat = client.get("/api/v1/extensions/talent-notices?category=E类&page_size=5")
+    resp_cat = client.get("/api/v1/extensions/talent-notices?category=E类&page_size=5", headers=auth_headers)
     assert resp_cat.status_code == 200
     d_cat = resp_cat.json()
     assert d_cat["total"] >= 1361
     print(f"[OK] Talent Notice by Category (E类) -> matched total={d_cat['total']}")
 
-    resp_combo = client.get("/api/v1/extensions/talent-notices?publish_date=2026-09-09&category=E类&page_size=5")
+    resp_combo = client.get("/api/v1/extensions/talent-notices?publish_date=2026-09-09&category=E类&page_size=5", headers=auth_headers)
     assert resp_combo.status_code == 200
     d_combo = resp_combo.json()
     assert d_combo["total"] == 72
@@ -102,7 +110,7 @@ def test_all_apis():
     else:
         print("❌ SOME ENDPOINTS FAILED")
     print("==================================================")
-    return all_passed
+    assert all_passed is True
 
 if __name__ == "__main__":
     success = test_all_apis()

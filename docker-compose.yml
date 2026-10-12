@@ -6,18 +6,22 @@ services:
     container_name: agent-control
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       - APP_NAME=Agent Control Plane
       - APP_ENV=production
       - DEBUG=false
       - PORT=8000
       - HOST=0.0.0.0
+      - API_KEY=${API_KEY:-agent_secret_master_key}
+      - REQUIRE_AUTH=true
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000}
       - DB_HOST=mysql
       - DB_PORT=3306
       - DB_USER=root
       - DB_PASSWORD=agent_secret
       - DB_NAME=agent_control
+
     depends_on:
       mysql:
         condition: service_healthy

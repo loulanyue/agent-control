@@ -13,6 +13,38 @@
   <!-- Apache ECharts CDN -->
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
   <script>
+    // 全局控制平面 API 认证拦截器 (CWE-306 兼容)
+    (function() {
+      const _origFetch = window.fetch;
+      window.fetch = function(input, init) {
+        init = init || {};
+        const token = localStorage.getItem('agent_control_api_key') || '';
+        if (token) {
+          if (!init.headers) {
+            init.headers = { 'Authorization': 'Bearer ' + token };
+          } else if (init.headers instanceof Headers) {
+            if (!init.headers.has('Authorization')) {
+              init.headers.set('Authorization', 'Bearer ' + token);
+            }
+          } else if (Array.isArray(init.headers)) {
+            const hasAuth = init.headers.some(([k]) => k.toLowerCase() === 'authorization');
+            if (!hasAuth) init.headers.push(['Authorization', 'Bearer ' + token]);
+          } else {
+            if (!init.headers['Authorization'] && !init.headers['authorization']) {
+              init.headers['Authorization'] = 'Bearer ' + token;
+            }
+          }
+        }
+        return _origFetch.call(this, input, init).then(res => {
+          if (res.status === 401) {
+            window.dispatchEvent(new CustomEvent('agent-control-auth-failed', { detail: { url: String(input) } }));
+          }
+          return res;
+        });
+      };
+    })();
+  </script>
+  <script>
     tailwind.config = {
       darkMode: 'class',
       theme: {
@@ -211,6 +243,15 @@
             class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition">
             <i class="fa-solid fa-arrows-rotate" :class="{ 'fa-spin text-indigo-400': loading }"></i>
             刷新
+          </button>
+
+          <!-- API Key 鉴权设置按钮 -->
+          <button
+            @click="openApiKeyModal"
+            class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition"
+            :title="currentApiKey ? '已配置 API Key' : '未配置 API Key'">
+            <i class="fa-solid fa-key" :class="currentApiKey ? 'text-emerald-400' : 'text-amber-400'"></i>
+            <span>[[ currentApiKey ? '已鉴权' : '设置密钥' ]]</span>
           </button>
         </div>
       </header>
@@ -3147,6 +3188,50 @@
       </div>
     </div>
 
+    <!-- API Key 配置弹窗 (CWE-306 身份认证) -->
+    <div v-if="apiKeyModalVisible" class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+      <div class="bg-slate-900 border border-slate-700 rounded-xl max-w-md w-full p-6 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2 text-indigo-400 font-semibold text-base">
+            <i class="fa-solid fa-shield-halved"></i>
+            <span>控制平面 API 身份认证</span>
+          </div>
+          <button @click="apiKeyModalVisible = false" class="text-slate-400 hover:text-white">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <p class="text-xs text-slate-400 leading-relaxed">
+          控制平面已开启全局身份认证防护（CWE-306 修复）。请输入您在 <code class="text-indigo-300 bg-slate-800 px-1 py-0.5 rounded">.env</code> 中配置的 <code class="text-indigo-300 bg-slate-800 px-1 py-0.5 rounded">API_KEY</code> 或生成的客户端 Token。
+        </p>
+        <div class="space-y-1.5">
+          <label class="text-xs text-slate-300 font-medium">API Key / Bearer Token</label>
+          <input
+            v-model="apiKeyInput"
+            type="password"
+            placeholder="请输入 ac_... 或密钥"
+            @keyup.enter="saveApiKey"
+            class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono">
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+          <button
+            @click="clearApiKey"
+            class="px-3 py-1.5 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 rounded-lg transition">
+            清除密钥
+          </button>
+          <button
+            @click="apiKeyModalVisible = false"
+            class="px-3 py-1.5 text-xs text-slate-400 hover:text-white rounded-lg transition">
+            取消
+          </button>
+          <button
+            @click="saveApiKey"
+            class="px-4 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow transition">
+            保存并刷新
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <script>
@@ -3164,6 +3249,42 @@
         const talentSortBy = ref('publish_date');
         const talentSortOrder = ref('desc');
         const filterBirthYear = ref('');
+
+        // API Key 鉴权管理 (CWE-306)
+        const apiKeyModalVisible = ref(false);
+        const currentApiKey = ref(localStorage.getItem('agent_control_api_key') || '');
+        const apiKeyInput = ref(currentApiKey.value);
+
+        const openApiKeyModal = () => {
+          apiKeyInput.value = currentApiKey.value;
+          apiKeyModalVisible.value = true;
+        };
+
+        const saveApiKey = () => {
+          const key = (apiKeyInput.value || '').trim();
+          if (key) {
+            localStorage.setItem('agent_control_api_key', key);
+            currentApiKey.value = key;
+            showToast('API Key 已生效', '已保存密钥并重新拉取数据', 'success', 2500);
+          } else {
+            localStorage.removeItem('agent_control_api_key');
+            currentApiKey.value = '';
+            showToast('API Key 已清除', '当前未配置任何鉴权凭据', 'info', 2500);
+          }
+          apiKeyModalVisible.value = false;
+          loadData();
+          fetchStats();
+        };
+
+        const clearApiKey = () => {
+          localStorage.removeItem('agent_control_api_key');
+          currentApiKey.value = '';
+          apiKeyInput.value = '';
+          apiKeyModalVisible.value = false;
+          showToast('API Key 已清除', '当前未配置任何鉴权凭据', 'info', 2500);
+          loadData();
+          fetchStats();
+        };
         const talentSortCombined = computed({
           get: () => `${talentSortBy.value}_${talentSortOrder.value}`,
           set: (val) => {
@@ -6710,6 +6831,13 @@
               else if (crawlModalVisible.value) crawlModalVisible.value = false;
               else if (companyCrawlModalVisible.value) companyCrawlModalVisible.value = false;
               else if (qccCrawlModalVisible.value) qccCrawlModalVisible.value = false;
+              else if (apiKeyModalVisible.value) apiKeyModalVisible.value = false;
+            }
+          });
+          window.addEventListener('agent-control-auth-failed', () => {
+            if (!apiKeyModalVisible.value) {
+              apiKeyModalVisible.value = true;
+              showToast('API 鉴权失败 (401)', '控制平面已启用身份认证，请配置有效 API Key', 'error', 4000);
             }
           });
           fetchStats();
@@ -6724,6 +6852,12 @@
         });
 
         return {
+          apiKeyModalVisible,
+          currentApiKey,
+          apiKeyInput,
+          openApiKeyModal,
+          saveApiKey,
+          clearApiKey,
           menus,
           sortedMenus,
           currentMenuId,
