@@ -21,6 +21,11 @@ PID_FILE="${DIR}/logs/agent_control.pid"
 LOG_FILE="${DIR}/logs/agent_control.log"
 mkdir -p "${DIR}/logs"
 
+PLIST_NAME="com.tpm.agent-control.plist"
+USER_LAUNCH_AGENTS="${HOME}/Library/LaunchAgents"
+INSTALLED_PLIST="${USER_LAUNCH_AGENTS}/${PLIST_NAME}"
+SOURCE_PLIST="${DIR}/scripts/${PLIST_NAME}"
+
 # 优先选择虚拟环境中的可执行文件
 if [ -f "${DIR}/venv/bin/uvicorn" ]; then
     UVICORN_BIN="${DIR}/venv/bin/uvicorn"
@@ -113,6 +118,12 @@ stop_service() {
     echo -e "${YELLOW}▶ 正在停止 Agent Control 服务...${NC}"
     local stopped=0
 
+    # 若配置了 macOS LaunchAgent 且正在加载中，先 unload 以免被 launchd 自动拉起
+    if [ -f "${INSTALLED_PLIST}" ] && launchctl list 2>/dev/null | grep -q "com.tpm.agent-control"; then
+        launchctl unload "${INSTALLED_PLIST}" 2>/dev/null || true
+        stopped=1
+    fi
+
     if [ -f "${PID_FILE}" ]; then
         local pid
         pid=$(cat "${PID_FILE}")
@@ -174,6 +185,17 @@ show_status() {
     else
         echo -e "${RED}○ Agent Control 未运行${NC}"
     fi
+
+    # 显示开机自启状态
+    if [ -f "${INSTALLED_PLIST}" ]; then
+        if launchctl list 2>/dev/null | grep -q "com.tpm.agent-control"; then
+            echo -e "  • 开机自启: ${GREEN}已启用 (macOS LaunchAgent)${NC}"
+        else
+            echo -e "  • 开机自启: ${YELLOW}已配置但未加载 (运行 ./start.sh autostart enable 重新加载)${NC}"
+        fi
+    else
+        echo -e "  • 开机自启: 未启用 (可通过 ./start.sh autostart enable 开启)"
+    fi
 }
 
 show_logs() {
@@ -181,6 +203,62 @@ show_logs() {
         tail -f -n 50 "${LOG_FILE}"
     else
         echo -e "${YELLOW}日志文件 ${LOG_FILE} 尚不存在。${NC}"
+    fi
+}
+
+autostart_enable() {
+    if [ "$(uname)" != "Darwin" ]; then
+        echo -e "${RED}错误: 开机自启功能仅支持 macOS 系统。${NC}"
+        exit 1
+    fi
+    echo -e "${BLUE}▶ 正在配置开机自动启动 (macOS LaunchAgent)...${NC}"
+    mkdir -p "${USER_LAUNCH_AGENTS}"
+    if [ ! -f "${SOURCE_PLIST}" ]; then
+        echo -e "${RED}未找到配置文件: ${SOURCE_PLIST}${NC}"
+        exit 1
+    fi
+
+    # 停止当前手动进程以释放端口
+    stop_service >/dev/null 2>&1 || true
+
+    cp "${SOURCE_PLIST}" "${INSTALLED_PLIST}"
+    launchctl unload "${INSTALLED_PLIST}" 2>/dev/null || true
+    launchctl load -w "${INSTALLED_PLIST}"
+
+    sleep 1.5
+    if launchctl list 2>/dev/null | grep -q "com.tpm.agent-control"; then
+        echo -e "${GREEN}✓ 开机自启已成功启用！${NC}"
+        echo -e "  • 配置文件: ${INSTALLED_PLIST}"
+        echo -e "  • 控制台地址: ${YELLOW}http://localhost:${PORT}/dashboard${NC}"
+    else
+        echo -e "${RED}⚠️  LaunchAgent 加载可能异常，请检查 logs/agent_control.log${NC}"
+    fi
+}
+
+autostart_disable() {
+    if [ "$(uname)" != "Darwin" ]; then
+        echo -e "${RED}错误: 开机自启功能仅支持 macOS 系统。${NC}"
+        exit 1
+    fi
+    echo -e "${YELLOW}▶ 正在取消开机自动启动...${NC}"
+    if [ -f "${INSTALLED_PLIST}" ]; then
+        launchctl unload "${INSTALLED_PLIST}" 2>/dev/null || true
+        rm -f "${INSTALLED_PLIST}"
+    fi
+    stop_service
+    echo -e "${GREEN}✓ 开机自启已成功取消。${NC}"
+}
+
+autostart_status() {
+    if [ -f "${INSTALLED_PLIST}" ]; then
+        if launchctl list 2>/dev/null | grep -q "com.tpm.agent-control"; then
+            echo -e "${GREEN}● 开机自启: 已启用并正在运行${NC}"
+            echo -e "  • 配置文件: ${INSTALLED_PLIST}"
+        else
+            echo -e "${YELLOW}○ 开机自启: 配置文件已存在但未激活${NC}"
+        fi
+    else
+        echo -e "${RED}○ 开机自启: 未配置${NC}"
     fi
 }
 
@@ -200,7 +278,11 @@ case "${ACTION}" in
     restart)
         stop_service
         sleep 1
-        start_daemon
+        if [ -f "${INSTALLED_PLIST}" ]; then
+            launchctl load -w "${INSTALLED_PLIST}"
+        else
+            start_daemon
+        fi
         ;;
     status)
         show_status
@@ -208,18 +290,37 @@ case "${ACTION}" in
     logs)
         show_logs
         ;;
+    autostart)
+        SUB_ACTION="${2:-status}"
+        case "${SUB_ACTION}" in
+            enable|on|install)
+                autostart_enable
+                ;;
+            disable|off|uninstall)
+                autostart_disable
+                ;;
+            status)
+                autostart_status
+                ;;
+            *)
+                echo -e "${RED}用法: $0 autostart [enable|disable|status]${NC}"
+                exit 1
+                ;;
+        esac
+        ;;
     help|-h|--help)
-        echo "用法: $0 [dev|start|stop|restart|status|logs]"
-        echo "  dev      - 开发模式 (默认，前台运行，带热重载)"
-        echo "  start    - 后台守护进程模式运行"
-        echo "  stop     - 停止服务"
-        echo "  restart  - 重启服务"
-        echo "  status   - 查看运行状态"
-        echo "  logs     - 实时查看后台日志"
+        echo "用法: $0 [dev|start|stop|restart|status|logs|autostart]"
+        echo "  dev                          - 开发模式 (默认，前台运行，带热重载)"
+        echo "  start                        - 后台守护进程模式运行"
+        echo "  stop                         - 停止服务"
+        echo "  restart                      - 重启服务"
+        echo "  status                       - 查看运行状态"
+        echo "  logs                         - 实时查看后台日志"
+        echo "  autostart enable/disable/status - 开机自启动管理 (macOS LaunchAgent)"
         ;;
     *)
         echo -e "${RED}未知命令: ${ACTION}${NC}"
-        echo "用法: $0 [dev|start|stop|restart|status|logs]"
+        echo "用法: $0 [dev|start|stop|restart|status|logs|autostart]"
         exit 1
         ;;
 esac
