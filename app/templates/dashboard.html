@@ -901,6 +901,13 @@
             <span>语法校验器</span>
           </button>
           <button
+            @click="openAntiWeakeningModal"
+            class="px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white rounded-lg border border-rose-500/40 text-xs font-medium flex-shrink-0 transition inline-flex items-center gap-1.5 shadow-sm"
+            title="仿真测试防弱化守卫卡点 (检测断言放宽、加ignore、删除测试、跨层调用)">
+            <i class="fa-solid fa-shield-virus text-xs"></i>
+            <span>防弱化仿真探测器</span>
+          </button>
+          <button
             @click="openNewContractModal"
             class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex-shrink-0 transition inline-flex items-center gap-1.5 shadow-md shadow-indigo-600/30">
             <i class="fa-solid fa-plus text-xs"></i>
@@ -2729,104 +2736,233 @@
           v-if="currentMenuId === 'contracts'"
           class="mb-4 bg-slate-900/70 border border-slate-800/90 rounded-xl overflow-hidden shadow-xl backdrop-blur">
           
-          <!-- 看板 Header 与操作栏 -->
-          <div class="px-4 py-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-850/60">
-            <div class="flex items-center space-x-3">
-              <div class="flex items-center gap-2.5">
-                <div class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
-                  <i class="fa-solid fa-scale-balanced text-sm"></i>
+          <!-- Case A: 防弱化拦截与仲裁日志专属 Header 与 KPI 看板 -->
+          <template v-if="currentSubTab.endpoint === '/api/v1/contracts/arbitration/logs'">
+            <div class="px-4 py-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-850/60">
+              <div class="flex items-center space-x-3">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
+                    <i class="fa-solid fa-shield-virus text-sm"></i>
+                  </div>
+                  <div>
+                    <h3 class="text-xs font-bold text-white flex items-center gap-1.5">
+                      架构守卫防弱化拦截与仲裁中心
+                      <span class="text-[9px] bg-rose-500/20 text-rose-300 px-1.5 py-0.2 rounded font-mono font-bold border border-rose-500/30">架构仲裁层</span>
+                    </h3>
+                    <p class="text-[11px] text-slate-400 font-mono mt-0.5">
+                      禁止弱化断言 · 禁止吞异常 · 禁止加ignore · 禁止私调阈值 · 禁止跨层直穿 · 100%硬阻断卡点
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 class="text-xs font-bold text-white flex items-center gap-1.5">
-                    编码契约机器可读与架构仲裁体系
-                    <span class="text-[9px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.2 rounded font-mono font-bold border border-indigo-500/30">契约与仲裁层</span>
-                  </h3>
-                  <p class="text-[11px] text-slate-400 font-mono mt-0.5">
-                    SemVer版本唯一编号 · 契约变更独立PR审批 · 破坏性冻结防AI弱化 · 消费端拓扑全景图
-                  </p>
+              </div>
+
+              <!-- 右侧控制区: 快捷操作 -->
+              <div class="flex items-center gap-2">
+                <button
+                  @click="openAntiWeakeningModal"
+                  class="px-2.5 py-1 bg-rose-600/30 hover:bg-rose-600 text-rose-200 border border-rose-500/40 rounded-lg text-xs font-medium flex items-center gap-1.5 transition">
+                  <i class="fa-solid fa-shield-virus text-rose-400"></i>
+                  <span>防弱化仿真探测器</span>
+                </button>
+                <button
+                  @click="fetchArbitrationStats"
+                  class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-xs font-medium flex items-center gap-1.5 transition">
+                  <i class="fa-solid fa-arrows-rotate text-xs"></i>
+                  <span>刷新指标</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 4 大防弱化核心指标卡片 -->
+            <div class="p-4 grid grid-cols-2 md:grid-cols-4 gap-3 bg-slate-900/40">
+              <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+                <div class="text-[11px] text-slate-400 flex items-center justify-between">
+                  <span>拦截违规总量</span>
+                  <i class="fa-solid fa-hand text-rose-400"></i>
+                </div>
+                <div class="text-xl font-bold font-mono text-rose-400 mt-1">
+                  [[ arbitrationStats.total_interceptions || 0 ]]
+                  <span class="text-xs font-normal text-slate-400 ml-1">次拦截</span>
+                </div>
+                <div class="text-[10px] text-rose-400 font-mono mt-0.5 flex items-center gap-1">
+                  <i class="fa-solid fa-ban"></i>
+                  <span>命中守卫规则触发硬阻断</span>
+                </div>
+              </div>
+
+              <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+                <div class="text-[11px] text-slate-400 flex items-center justify-between">
+                  <span>防弱化阻断率</span>
+                  <i class="fa-solid fa-shield-halved text-emerald-400"></i>
+                </div>
+                <div class="text-xl font-bold font-mono text-emerald-400 mt-1">
+                  [[ arbitrationStats.blocked_rate || 100 ]]%
+                  <span class="text-xs font-normal text-slate-400 ml-1">防护强度</span>
+                </div>
+                <div class="text-[10px] text-emerald-400 font-mono mt-0.5 flex items-center gap-1">
+                  <i class="fa-solid fa-lock"></i>
+                  <span>零宽松无放行原则</span>
+                </div>
+              </div>
+
+              <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+                <div class="text-[11px] text-slate-400 flex items-center justify-between">
+                  <span>ADR 破例特批</span>
+                  <i class="fa-solid fa-file-contract text-sky-400"></i>
+                </div>
+                <div class="text-xl font-bold font-mono text-sky-400 mt-1">
+                  [[ arbitrationStats.waived_count || 0 ]]
+                  <span class="text-xs font-normal text-slate-400 ml-1">项特批</span>
+                </div>
+                <div class="text-[10px] text-sky-400 font-mono mt-0.5 flex items-center gap-1">
+                  <i class="fa-solid fa-clock-rotate-left"></i>
+                  <span>附带有效期，避免破例永久化</span>
+                </div>
+              </div>
+
+              <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+                <div class="text-[11px] text-slate-400 flex items-center justify-between">
+                  <span>待人工仲裁复核</span>
+                  <i class="fa-solid fa-user-check text-amber-400"></i>
+                </div>
+                <div class="text-xl font-bold font-mono text-amber-400 mt-1">
+                  [[ arbitrationStats.pending_count || 0 ]]
+                  <span class="text-xs font-normal text-slate-400 ml-1">条挂起</span>
+                </div>
+                <div class="text-[10px] text-amber-400 font-mono mt-0.5 flex items-center gap-1">
+                  <i class="fa-solid fa-hourglass-half"></i>
+                  <span>等待架构委员会人工裁决</span>
                 </div>
               </div>
             </div>
 
-            <!-- 右侧控制区: 快捷操作 -->
-            <div class="flex items-center gap-2">
-              <button
-                @click="openVerifySchemaModal"
-                class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium flex items-center gap-1.5 transition">
-                <i class="fa-solid fa-code text-indigo-400"></i>
-                <span>Schema 在线语法校验</span>
-              </button>
-              <button
-                @click="openNewContractModal"
-                class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-indigo-600/30 transition">
-                <i class="fa-solid fa-plus text-xs"></i>
-                <span>录入新契约</span>
-              </button>
-            </div>
-          </div>
+            <!-- ECharts 图表展示区: 违规类型分布 与 仓库/严重度分布 -->
+            <div class="p-4 grid grid-cols-1 lg:grid-cols-2 gap-4 bg-slate-950/40 border-t border-slate-800/80">
+              <div class="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                    <i class="fa-solid fa-chart-column text-rose-400"></i>
+                    防弱化违规行为类型分布
+                  </span>
+                  <span class="text-[11px] font-mono text-slate-400">拦截次数排序</span>
+                </div>
+                <div ref="arbitrationTypeChartEl" class="w-full h-48"></div>
+              </div>
 
-          <!-- 4 大核心指标卡片 -->
-          <div class="p-4 grid grid-cols-2 md:grid-cols-4 gap-3 bg-slate-900/40">
-            <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
-              <div class="text-[11px] text-slate-400 flex items-center justify-between">
-                <span>契约规范总库</span>
-                <i class="fa-solid fa-file-contract text-indigo-400"></i>
+              <div class="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                    <i class="fa-solid fa-chart-pie text-sky-400"></i>
+                    涉事代码仓库与严重度分布
+                  </span>
+                  <span class="text-[11px] font-mono text-slate-400">tpm-backend / web / agent</span>
+                </div>
+                <div ref="arbitrationRepoChartEl" class="w-full h-48"></div>
               </div>
-              <div class="text-xl font-bold font-mono text-white mt-1">
-                [[ contractStats.total_contracts || 6 ]]
-                <span class="text-xs font-normal text-slate-400 ml-1">项规范</span>
+            </div>
+          </template>
+
+          <!-- Case B: 契约基础规则/演进/消费端 Tab Header 与 KPI 看板 -->
+          <template v-else>
+            <!-- 看板 Header 与操作栏 -->
+            <div class="px-4 py-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-850/60">
+              <div class="flex items-center space-x-3">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
+                    <i class="fa-solid fa-scale-balanced text-sm"></i>
+                  </div>
+                  <div>
+                    <h3 class="text-xs font-bold text-white flex items-center gap-1.5">
+                      编码契约机器可读与架构仲裁体系
+                      <span class="text-[9px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.2 rounded font-mono font-bold border border-indigo-500/30">契约与仲裁层</span>
+                    </h3>
+                    <p class="text-[11px] text-slate-400 font-mono mt-0.5">
+                      SemVer版本唯一编号 · 契约变更独立PR审批 · 破坏性冻结防AI弱化 · 消费端拓扑全景图
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div class="text-[10px] text-emerald-400 font-mono mt-0.5 flex items-center gap-1">
-                <i class="fa-solid fa-check"></i>
-                <span>OpenAPI / JSONSchema / DTO</span>
+
+              <!-- 右侧控制区: 快捷操作 -->
+              <div class="flex items-center gap-2">
+                <button
+                  @click="openVerifySchemaModal"
+                  class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium flex items-center gap-1.5 transition">
+                  <i class="fa-solid fa-code text-indigo-400"></i>
+                  <span>Schema 在线语法校验</span>
+                </button>
+                <button
+                  @click="openNewContractModal"
+                  class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-indigo-600/30 transition">
+                  <i class="fa-solid fa-plus text-xs"></i>
+                  <span>录入新契约</span>
+                </button>
               </div>
             </div>
 
-            <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
-              <div class="text-[11px] text-slate-400 flex items-center justify-between">
-                <span>修订演进流水线</span>
-                <i class="fa-solid fa-code-branch text-amber-400"></i>
+            <!-- 4 大核心指标卡片 -->
+            <div class="p-4 grid grid-cols-2 md:grid-cols-4 gap-3 bg-slate-900/40">
+              <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+                <div class="text-[11px] text-slate-400 flex items-center justify-between">
+                  <span>契约规范总库</span>
+                  <i class="fa-solid fa-file-contract text-indigo-400"></i>
+                </div>
+                <div class="text-xl font-bold font-mono text-white mt-1">
+                  [[ contractStats.total_contracts || 6 ]]
+                  <span class="text-xs font-normal text-slate-400 ml-1">项规范</span>
+                </div>
+                <div class="text-[10px] text-emerald-400 font-mono mt-0.5 flex items-center gap-1">
+                  <i class="fa-solid fa-check"></i>
+                  <span>OpenAPI / JSONSchema / DTO</span>
+                </div>
               </div>
-              <div class="text-xl font-bold font-mono text-amber-400 mt-1">
-                [[ contractStats.total_revisions || 9 ]]
-                <span class="text-xs font-normal text-slate-400 ml-1">次审计</span>
-              </div>
-              <div class="text-[10px] text-amber-400 font-mono mt-0.5 flex items-center gap-1">
-                <i class="fa-solid fa-lock"></i>
-                <span>独立 PR 审批归档不可篡改</span>
-              </div>
-            </div>
 
-            <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
-              <div class="text-[11px] text-slate-400 flex items-center justify-between">
-                <span>消费端依赖拓扑</span>
-                <i class="fa-solid fa-network-wired text-sky-400"></i>
+              <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+                <div class="text-[11px] text-slate-400 flex items-center justify-between">
+                  <span>修订演进流水线</span>
+                  <i class="fa-solid fa-code-branch text-amber-400"></i>
+                </div>
+                <div class="text-xl font-bold font-mono text-amber-400 mt-1">
+                  [[ contractStats.total_revisions || 9 ]]
+                  <span class="text-xs font-normal text-slate-400 ml-1">次审计</span>
+                </div>
+                <div class="text-[10px] text-amber-400 font-mono mt-0.5 flex items-center gap-1">
+                  <i class="fa-solid fa-lock"></i>
+                  <span>独立 PR 审批归档不可篡改</span>
+                </div>
               </div>
-              <div class="text-xl font-bold font-mono text-sky-400 mt-1">
-                [[ contractStats.total_consumers || 11 ]]
-                <span class="text-xs font-normal text-slate-400 ml-1">个依赖</span>
-              </div>
-              <div class="text-[10px] text-sky-400 font-mono mt-0.5 flex items-center gap-1">
-                <i class="fa-solid fa-link"></i>
-                <span>前后端/Agent消费端双向对齐</span>
-              </div>
-            </div>
 
-            <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
-              <div class="text-[11px] text-slate-400 flex items-center justify-between">
-                <span>破坏性变更冻结</span>
-                <i class="fa-solid fa-shield-halved text-rose-400"></i>
+              <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+                <div class="text-[11px] text-slate-400 flex items-center justify-between">
+                  <span>消费端依赖拓扑</span>
+                  <i class="fa-solid fa-network-wired text-sky-400"></i>
+                </div>
+                <div class="text-xl font-bold font-mono text-sky-400 mt-1">
+                  [[ contractStats.total_consumers || 11 ]]
+                  <span class="text-xs font-normal text-slate-400 ml-1">个依赖</span>
+                </div>
+                <div class="text-[10px] text-sky-400 font-mono mt-0.5 flex items-center gap-1">
+                  <i class="fa-solid fa-link"></i>
+                  <span>前后端/Agent消费端双向对齐</span>
+                </div>
               </div>
-              <div class="text-xl font-bold font-mono text-rose-400 mt-1">
-                [[ contractStats.frozen_contracts || 4 ]]
-                <span class="text-xs font-normal text-slate-400 ml-1">项高危锁定</span>
-              </div>
-              <div class="text-[10px] text-rose-400 font-mono mt-0.5 flex items-center gap-1">
-                <i class="fa-solid fa-ban"></i>
-                <span>阻断弱化测试与跳过约束</span>
+
+              <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+                <div class="text-[11px] text-slate-400 flex items-center justify-between">
+                  <span>破坏性变更冻结</span>
+                  <i class="fa-solid fa-shield-halved text-rose-400"></i>
+                </div>
+                <div class="text-xl font-bold font-mono text-rose-400 mt-1">
+                  [[ contractStats.frozen_contracts || 4 ]]
+                  <span class="text-xs font-normal text-slate-400 ml-1">项高危锁定</span>
+                </div>
+                <div class="text-[10px] text-rose-400 font-mono mt-0.5 flex items-center gap-1">
+                  <i class="fa-solid fa-ban"></i>
+                  <span>防弱化已拦截 [[ arbitrationStats.total_interceptions || 0 ]] 次违规</span>
+                </div>
               </div>
             </div>
-          </div>
+          </template>
 
           <!-- 仲裁优先级宣言条 -->
           <div class="px-4 py-2.5 bg-indigo-950/30 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -2842,6 +2978,7 @@
             </div>
             <div class="flex items-center gap-3 text-slate-400 font-mono text-[11px]">
               <span class="flex items-center gap-1 text-emerald-400"><i class="fa-solid fa-shield-halved"></i> 架构守卫卡点</span>
+              <span class="flex items-center gap-1 text-rose-400"><i class="fa-solid fa-ban"></i> 严禁弱化约束</span>
               <span class="flex items-center gap-1 text-sky-400"><i class="fa-solid fa-file-signature"></i> 契约变更单独走PR</span>
             </div>
           </div>
@@ -3380,6 +3517,137 @@
                 </div>
               </div>
             </div>
+          </template>
+
+          <!-- 架构守卫与防弱化拦截专属详情布局 -->
+          <template v-else-if="detailRow.event_id">
+            <!-- 核心事件指标卡片 -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-slate-950/70 p-3.5 rounded-xl border border-rose-500/30">
+              <div class="flex flex-col">
+                <span class="text-[11px] text-slate-500 font-mono">拦截事件编号</span>
+                <span class="text-xs font-bold text-rose-400 font-mono mt-0.5 select-all">[[ detailRow.event_id ]]</span>
+              </div>
+              <div class="flex flex-col">
+                <span class="text-[11px] text-slate-500 font-mono">违规严重等级</span>
+                <span class="text-xs font-bold font-mono mt-0.5" :class="detailRow.severity === 'CRITICAL' ? 'text-rose-400' : 'text-amber-400'">
+                  [[ detailRow.severity ]]
+                </span>
+              </div>
+              <div class="flex flex-col">
+                <span class="text-[11px] text-slate-500 font-mono">拦截处置动作</span>
+                <span class="text-xs font-semibold text-rose-300 mt-0.5 font-mono">
+                  [[ formatBadgeText(detailRow.interception_action, 'interception_action') ]]
+                </span>
+              </div>
+              <div class="flex flex-col">
+                <span class="text-[11px] text-slate-500 font-mono">涉事Agent/操作者</span>
+                <span class="text-xs font-medium text-indigo-300 mt-0.5 font-mono">[[ detailRow.operator_or_agent || 'AI-Assistant' ]]</span>
+              </div>
+            </div>
+
+            <!-- 规则信息与涉事仓库 -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs bg-slate-950/50 p-3 rounded-xl border border-slate-800/80">
+              <div class="flex items-center gap-2">
+                <span class="text-slate-500 text-[11px]">违规大类：</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                  [[ formatBadgeText(detailRow.event_type, 'event_type') ]]
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-slate-500 text-[11px]">所属代码仓：</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                  [[ detailRow.source_repo ]]
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-slate-500 text-[11px]">关联契约：</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono text-slate-300 bg-slate-800 border border-slate-700">
+                  [[ detailRow.contract_id || '通用架构规约' ]]
+                </span>
+              </div>
+              <div class="col-span-1 sm:col-span-3 flex items-center gap-2">
+                <span class="text-slate-500 text-[11px] whitespace-nowrap">涉事文件：</span>
+                <span class="font-mono text-slate-200 select-all truncate text-xs">[[ detailRow.target_file ]]</span>
+              </div>
+            </div>
+
+            <!-- 命中的架构守卫规则 -->
+            <div class="space-y-1.5">
+              <div class="flex items-center gap-1.5 text-xs font-semibold text-rose-400 uppercase tracking-wider">
+                <i class="fa-solid fa-shield-halved text-rose-400"></i>
+                <span>命中的架构守卫规则</span>
+              </div>
+              <div class="bg-rose-950/20 p-3 rounded-xl border border-rose-500/30 text-xs text-rose-200 font-semibold">
+                [[ detailRow.rule_name ]]
+              </div>
+            </div>
+
+            <!-- 仲裁裁决与阻断原因宣言 -->
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between text-xs font-semibold text-amber-400 uppercase tracking-wider">
+                <div class="flex items-center gap-1.5">
+                  <i class="fa-solid fa-gavel text-amber-400"></i>
+                  <span>仲裁裁决与卡点依据 (优先级: 契约 &gt; 测试 &gt; 架构规则 &gt; 现有代码 &gt; AI判断)</span>
+                </div>
+              </div>
+              <div class="bg-amber-950/20 p-3.5 rounded-xl border border-amber-500/30 text-xs text-amber-100 leading-relaxed font-sans select-text whitespace-pre-wrap">
+                [[ detailRow.arbitration_decision ]]
+              </div>
+            </div>
+
+            <!-- 违规代码 Diff 关键片段 -->
+            <div v-if="detailRow.diff_snippet" class="space-y-1.5">
+              <div class="flex items-center justify-between text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                <div class="flex items-center gap-1.5">
+                  <i class="fa-solid fa-code-compare text-indigo-400"></i>
+                  <span>违规代码 Diff 关键比对 (红负绿正)</span>
+                </div>
+                <button
+                  @click="copyTextToClipboard(detailRow.diff_snippet, '已复制违规Diff')"
+                  class="text-[11px] text-slate-400 hover:text-white transition inline-flex items-center gap-1 font-mono cursor-pointer">
+                  <i class="fa-regular fa-copy"></i>
+                  复制Diff
+                </button>
+              </div>
+              <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs font-mono overflow-x-auto max-h-64 leading-relaxed whitespace-pre select-all">
+                <div v-for="(dline, lidx) in (detailRow.diff_snippet || '').split('\n')" :key="lidx"
+                     :class="dline.startsWith('+') ? 'text-emerald-400 bg-emerald-950/30 px-1 rounded' : (dline.startsWith('-') ? 'text-rose-400 bg-rose-950/30 px-1 rounded' : 'text-slate-400')">
+                  [[ dline ]]
+                </div>
+              </div>
+            </div>
+
+            <!-- ADR破例卡片 (如有) -->
+            <div v-if="detailRow.adr_reference" class="p-3 bg-emerald-950/20 rounded-xl border border-emerald-500/30 flex items-center justify-between text-xs">
+              <div class="flex items-center gap-2">
+                <i class="fa-solid fa-file-circle-check text-emerald-400 text-base"></i>
+                <div>
+                  <span class="font-bold text-emerald-300">已授权架构决策记录例外 (ADR Exception): </span>
+                  <span class="font-mono text-emerald-200 font-bold ml-1">[[ detailRow.adr_reference ]]</span>
+                </div>
+              </div>
+              <div v-if="detailRow.adr_expires_at" class="text-slate-400 text-[11px] font-mono">
+                过期时间: [[ detailRow.adr_expires_at ]]
+              </div>
+            </div>
+
+            <!-- 人工处置操作工具条 -->
+            <div v-if="detailRow.status === 'blocked' || detailRow.status === 'pending_review'" class="pt-2 flex items-center justify-end gap-2 border-t border-slate-800">
+              <button
+                @click="openTakeActionModal(detailRow, 'grant_adr_exception')"
+                class="px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white border border-amber-500/40 rounded-lg text-xs font-medium transition inline-flex items-center gap-1.5 cursor-pointer">
+                <i class="fa-solid fa-file-signature"></i>
+                <span>授予 ADR 特批例外</span>
+              </button>
+              <button
+                @click="openTakeActionModal(detailRow, 'confirm_blocked')"
+                class="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold transition inline-flex items-center gap-1.5 shadow-md shadow-rose-600/30 cursor-pointer">
+                <i class="fa-solid fa-gavel"></i>
+                <span>人工确认违规硬阻断</span>
+              </button>
+            </div>
+          </template>
+
           <!-- 编码契约专属详情布局 (契约中心) -->
           <template v-else-if="detailRow.contract_id">
             <!-- 核心指标卡片 -->
@@ -4376,6 +4644,230 @@
       </div>
     </div>
 
+    <!-- 架构守卫防弱化仿真探测器模态框 (Anti-Weakening Simulation Modal) -->
+    <div v-if="antiWeakeningModalVisible" @click.self="antiWeakeningModalVisible = false" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer">
+      <div @click.stop class="bg-slate-900 border border-rose-500/30 rounded-2xl max-w-3xl w-full shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150 cursor-default">
+        <!-- Header -->
+        <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-850">
+          <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
+              <i class="fa-solid fa-shield-virus text-sm"></i>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                防弱化架构守卫实时仿真探测器
+                <span class="text-[10px] font-mono bg-rose-500/20 text-rose-300 px-1.5 py-0.5 rounded border border-rose-500/30">优先规则卡点</span>
+              </h3>
+              <p class="text-[11px] text-slate-400">仿真检测 AI 是否通过放宽断言、吞异常、加 ignore、降覆盖率、删测试或跨层调用逃避构建失败</p>
+            </div>
+          </div>
+          <button @click="antiWeakeningModalVisible = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+          <!-- 快捷典型违规场景预设 -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between text-xs text-slate-400 font-semibold">
+              <span class="flex items-center gap-1.5">
+                <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i>
+                点击加载典型 AI 逃避与弱化场景预设:
+              </span>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="preset in simPresets"
+                :key="preset.name"
+                @click="loadSimPreset(preset)"
+                class="px-2.5 py-1 bg-slate-800 hover:bg-rose-950/60 hover:text-rose-300 text-slate-300 border border-slate-700 hover:border-rose-500/50 rounded-lg text-xs transition cursor-pointer flex items-center gap-1">
+                <span>[[ preset.name ]]</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 涉事文件路径与所属代码仓 -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="sm:col-span-2">
+              <label class="block text-xs font-semibold text-slate-300 mb-1">目标代码/文件相对路径</label>
+              <input
+                type="text"
+                v-model="simFilePath"
+                placeholder="例如 src/test/java/com/sys/tpm/service/PackageServiceTest.java"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 text-xs font-mono focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">所属代码仓</label>
+              <select
+                v-model="simRepo"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 text-xs font-mono focus:outline-none focus:border-rose-500">
+                <option value="tpm-backend-app">tpm-backend-app (业务后端)</option>
+                <option value="tpm-frontend-web">tpm-frontend-web (前端界面)</option>
+                <option value="agent-control">agent-control (管控服务)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Diff 内容编辑框 -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between text-xs text-slate-400">
+              <span class="font-semibold text-slate-300">代码变更 Diff 文本 (使用 + 表示新增行，- 表示删除行):</span>
+              <span class="font-mono text-[11px]">[[ simDiffContent ? simDiffContent.split('\n').length + ' 行' : '0 行' ]]</span>
+            </div>
+            <textarea
+              v-model="simDiffContent"
+              rows="7"
+              placeholder="+ // assertTrue(true);&#10;+ /* eslint-disable */&#10;- assertEquals(200, res.code);"
+              class="w-full p-3.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-emerald-300 placeholder-slate-600 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"></textarea>
+          </div>
+
+          <!-- 仿真探测分析结果展示卡片 -->
+          <div v-if="simResult" class="p-4 rounded-xl border text-xs animate-in fade-in duration-200"
+               :class="simResult.violation_detected ? 'bg-rose-950/30 border-rose-500/50 text-rose-300' : 'bg-emerald-950/30 border-emerald-500/50 text-emerald-300'">
+            <div class="flex items-center justify-between font-bold mb-2 pb-2 border-b"
+                 :class="simResult.violation_detected ? 'border-rose-800/60' : 'border-emerald-800/60'">
+              <div class="flex items-center gap-2 text-sm">
+                <i :class="simResult.violation_detected ? 'fa-solid fa-triangle-exclamation text-rose-400' : 'fa-solid fa-circle-check text-emerald-400'"></i>
+                <span>[[ simResult.violation_detected ? '【硬阻断 BLOCKED】检测到高危防弱化违规行为！' : '【允许通过 ALLOWED】未检测到弱化或跨层架构违规' ]]</span>
+              </div>
+              <span class="font-mono text-xs px-2 py-0.5 rounded font-bold"
+                    :class="simResult.violation_detected ? 'bg-rose-500 text-white' : 'bg-emerald-600 text-white'">
+                [[ simResult.action === 'blocked' ? 'HARD BLOCKED (卡点拦截)' : 'CLEAN PASS' ]]
+              </span>
+            </div>
+
+            <!-- 裁决说明 -->
+            <div class="p-2.5 rounded-lg mb-3 text-xs" :class="simResult.violation_detected ? 'bg-rose-900/40 text-rose-100' : 'bg-emerald-900/40 text-emerald-100'">
+              <p class="leading-relaxed">[[ simResult.arbitration_summary ]]</p>
+            </div>
+
+            <!-- 命中违规规则列表 -->
+            <div v-if="simResult.matched_rules && simResult.matched_rules.length" class="space-y-2 mt-2">
+              <div class="font-bold text-white text-xs flex items-center gap-1.5">
+                <i class="fa-solid fa-list-check text-amber-400"></i>
+                命中以下架构守卫规则 ([[ simResult.matched_rules.length ]] 项):
+              </div>
+              <div v-for="(rule, idx) in simResult.matched_rules" :key="idx" class="p-3 bg-slate-950/80 rounded-lg border border-slate-800 text-slate-300 space-y-1">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-white text-xs">[[ rule.rule_name ]]</span>
+                  <span class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold">[[ rule.rule_code ]]</span>
+                </div>
+                <div class="text-[11px] text-amber-300">[[ rule.pattern_matched ]]</div>
+                <div class="font-mono text-[11px] bg-slate-900 px-2 py-1 rounded text-rose-300 whitespace-pre">[[ rule.snippet ]]</div>
+                <div class="text-[10px] text-slate-400 italic">[[ rule.arbitration_rule ]]</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="px-6 py-3.5 border-t border-slate-800 bg-slate-900 flex items-center justify-between">
+          <span class="text-[11px] text-slate-500 font-mono">优先级铁律: 契约 &gt; 测试 &gt; 架构规则 &gt; 现有代码 &gt; AI判断</span>
+          <div class="flex items-center gap-2">
+            <button
+              @click="antiWeakeningModalVisible = false"
+              class="px-4 py-1.5 text-xs text-slate-400 hover:text-white rounded-lg transition">
+              关闭
+            </button>
+            <button
+              @click="runAntiWeakeningSimulate"
+              :disabled="simulating || !simDiffContent.trim()"
+              class="px-4 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-500 rounded-lg shadow transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer">
+              <i :class="simulating ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-shield-virus'"></i>
+              <span>[[ simulating ? '正在探测分析...' : '执行守卫卡点检测' ]]</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 架构仲裁与ADR处置模态框 (Arbitration Action Modal) -->
+    <div v-if="actionModalVisible" @click.self="actionModalVisible = false" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer">
+      <div @click.stop class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150 cursor-default">
+        <!-- Header -->
+        <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-850">
+          <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
+              <i class="fa-solid fa-gavel text-sm"></i>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-white">架构仲裁人工裁决处置</h3>
+              <p class="text-[11px] text-slate-400">事件编号: [[ actionRow?.event_id ]]</p>
+            </div>
+          </div>
+          <button @click="actionModalVisible = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="p-6 space-y-4 text-xs">
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">裁决动作类型:</label>
+            <div class="flex items-center gap-2">
+              <button
+                @click="actionType = 'confirm_blocked'"
+                :class="actionType === 'confirm_blocked' ? 'bg-rose-600 text-white font-bold' : 'bg-slate-800 text-slate-400 hover:text-white'"
+                class="px-3 py-1.5 rounded-lg border border-slate-700 transition">
+                人工确认违规硬阻断
+              </button>
+              <button
+                @click="actionType = 'grant_adr_exception'"
+                :class="actionType === 'grant_adr_exception' ? 'bg-amber-600 text-white font-bold' : 'bg-slate-800 text-slate-400 hover:text-white'"
+                class="px-3 py-1.5 rounded-lg border border-slate-700 transition">
+                授予 ADR 特批例外
+              </button>
+            </div>
+          </div>
+
+          <div v-if="actionType === 'grant_adr_exception'">
+            <label class="block font-semibold text-slate-300 mb-1">破例关联 ADR 架构决策记录编号 (必填):</label>
+            <input
+              type="text"
+              v-model="actionAdrRef"
+              placeholder="例如 ADR-2026-TPM-014"
+              class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 font-mono focus:outline-none focus:border-amber-500">
+            <p class="text-[11px] text-slate-500 mt-1">系统将自动为破例设置30天有效过期时间，到期自动失效，杜绝破例永久化。</p>
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">处置审批人签名:</label>
+            <input
+              type="text"
+              v-model="actionOperator"
+              placeholder="例如 ChiefArchitect / ArchCommittee"
+              class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 font-mono focus:outline-none focus:border-indigo-500">
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">仲裁裁决理由与整改要求:</label>
+            <textarea
+              v-model="actionReason"
+              rows="3"
+              placeholder="请详述仲裁裁决的判定理由、技术依据与整改方案..."
+              class="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="px-6 py-3.5 border-t border-slate-800 bg-slate-900 flex items-center justify-end gap-2">
+          <button
+            @click="actionModalVisible = false"
+            class="px-4 py-1.5 text-xs text-slate-400 hover:text-white rounded-lg transition">
+            取消
+          </button>
+          <button
+            @click="submitArbitrationAction"
+            :disabled="actionSubmitting || !actionReason.trim()"
+            class="px-4 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer">
+            <i :class="actionSubmitting ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-check'"></i>
+            <span>[[ actionSubmitting ? '正在提交...' : '确认仲裁裁决' ]]</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 全局实时通知浮层 (Toast) -->
     <div v-if="toast.visible" class="fixed top-5 right-5 z-50 transition-all transform duration-300">
       <div
@@ -4750,6 +5242,318 @@
             }
           } catch (e) {
             console.error('fetchContractStats error:', e);
+          }
+        };
+
+        // 编码契约防弱化拦截与架构仲裁中心
+        const arbitrationStats = ref({
+          total_interceptions: 8,
+          blocked_count: 6,
+          waived_count: 1,
+          pending_count: 1,
+          blocked_rate: 75.0,
+          by_event_type: [],
+          by_repo: [],
+          by_severity: [],
+          recent_events: []
+        });
+
+        const arbitrationTypeChartEl = ref(null);
+        const arbitrationRepoChartEl = ref(null);
+        let arbitrationTypeChartInstance = null;
+        let arbitrationRepoChartInstance = null;
+
+        const fetchArbitrationStats = async () => {
+          try {
+            const resp = await fetch('/api/v1/contracts/arbitration/stats', {
+              headers: getAuthHeaders()
+            });
+            if (resp.ok) {
+              const data = await resp.json();
+              arbitrationStats.value = data;
+              initArbitrationCharts();
+            }
+          } catch (e) {
+            console.error('fetchArbitrationStats error:', e);
+          }
+        };
+
+        const initArbitrationCharts = () => {
+          nextTick(() => {
+            // 1. 违规行为类型分布 (横向柱状图)
+            if (arbitrationTypeChartEl.value && typeof echarts !== 'undefined') {
+              arbitrationTypeChartInstance = getOrInitChart(arbitrationTypeChartInstance, arbitrationTypeChartEl.value);
+              if (arbitrationTypeChartInstance) {
+                const types = arbitrationStats.value.by_event_type || [];
+                const typeLabels = {
+                  test_assertion_weakened: '断言弱化/吞异常',
+                  test_deleted: '测试用例删除',
+                  lint_rule_ignored: 'Ignore/Suppress绕过',
+                  threshold_lowered: '质量门禁调低',
+                  contract_bypassed: '契约未经独立PR',
+                  layer_violation: '跨层架构直穿',
+                  protected_file_modified: '受保护文件篡改'
+                };
+                const sortedTypes = [...types].sort((a, b) => a.count - b.count);
+                const yData = sortedTypes.map(t => typeLabels[t.event_type] || t.event_type);
+                const xData = sortedTypes.map(t => t.count);
+
+                arbitrationTypeChartInstance.setOption({
+                  backgroundColor: 'transparent',
+                  tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    backgroundColor: '#0f172a',
+                    borderColor: '#334155',
+                    padding: [8, 12],
+                    textStyle: { color: '#f8fafc', fontSize: 12 }
+                  },
+                  grid: { top: 15, right: 35, bottom: 20, left: 130, containLabel: false },
+                  xAxis: {
+                    type: 'value',
+                    minInterval: 1,
+                    splitLine: { lineStyle: { color: '#1e293b' } },
+                    axisLabel: { color: '#94a3b8', fontSize: 11 }
+                  },
+                  yAxis: {
+                    type: 'category',
+                    data: yData,
+                    axisLabel: { color: '#cbd5e1', fontSize: 11 },
+                    axisLine: { lineStyle: { color: '#334155' } }
+                  },
+                  series: [{
+                    type: 'bar',
+                    data: xData,
+                    barWidth: 12,
+                    itemStyle: {
+                      borderRadius: [0, 4, 4, 0],
+                      color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                        { offset: 0, color: '#e11d48' },
+                        { offset: 1, color: '#fb7185' }
+                      ])
+                    },
+                    label: {
+                      show: true,
+                      position: 'right',
+                      color: '#fb7185',
+                      fontSize: 11,
+                      fontFamily: 'monospace'
+                    }
+                  }]
+                });
+              }
+            }
+
+            // 2. 涉事代码仓库与严重度分布 (环形饼图)
+            if (arbitrationRepoChartEl.value && typeof echarts !== 'undefined') {
+              arbitrationRepoChartInstance = getOrInitChart(arbitrationRepoChartInstance, arbitrationRepoChartEl.value);
+              if (arbitrationRepoChartInstance) {
+                const repos = arbitrationStats.value.by_repo || [];
+                const pieData = repos.map(r => ({ name: r.repo, value: r.count }));
+                const colorPalette = ['#6366f1', '#0ea5e9', '#f43f5e', '#f59e0b', '#10b981'];
+
+                arbitrationRepoChartInstance.setOption({
+                  backgroundColor: 'transparent',
+                  tooltip: {
+                    trigger: 'item',
+                    backgroundColor: '#0f172a',
+                    borderColor: '#334155',
+                    padding: [8, 12],
+                    textStyle: { color: '#f8fafc', fontSize: 12 },
+                    formatter: '{b}: <span style="font-weight:bold;color:#38bdf8">{c}</span> 次 ({d}%)'
+                  },
+                  legend: {
+                    bottom: 0,
+                    textStyle: { color: '#94a3b8', fontSize: 11 },
+                    itemWidth: 10,
+                    itemHeight: 10
+                  },
+                  color: colorPalette,
+                  series: [{
+                    name: '涉事代码仓库',
+                    type: 'pie',
+                    radius: ['45%', '70%'],
+                    center: ['50%', '42%'],
+                    avoidLabelOverlap: false,
+                    itemStyle: {
+                      borderRadius: 6,
+                      borderColor: '#0f172a',
+                      borderWidth: 2
+                    },
+                    label: {
+                      show: false,
+                      position: 'center'
+                    },
+                    emphasis: {
+                      label: {
+                        show: true,
+                        fontSize: 13,
+                        fontWeight: 'bold',
+                        color: '#fff',
+                        formatter: '{b}\n{c} 次'
+                      }
+                    },
+                    data: pieData.length ? pieData : [{ name: '暂无违规', value: 0 }]
+                  }]
+                });
+              }
+            }
+          });
+        };
+
+        // 防弱化仿真探测器模态框状态与逻辑
+        const antiWeakeningModalVisible = ref(false);
+        const simFilePath = ref('src/test/java/com/sys/tpm/service/PackageServiceTest.java');
+        const simRepo = ref('tpm-backend-app');
+        const simAgent = ref('AI-Assistant');
+        const simDiffContent = ref('- assertEquals("SUCCESS", result.getStatus());\n+ // assertEquals("SUCCESS", result.getStatus());\n+ assertTrue(true); // temporary workaround for CI');
+        const simulating = ref(false);
+        const simResult = ref(null);
+
+        const simPresets = [
+          {
+            name: '1. 放宽测试断言 (assertTrue(true))',
+            file: 'src/test/java/com/sys/tpm/service/PackageServiceTest.java',
+            repo: 'tpm-backend-app',
+            diff: '- assertEquals("SUCCESS", result.getStatus());\n- assertEquals(3, result.getItems().size());\n+ // assertEquals("SUCCESS", result.getStatus());\n+ assertTrue(true); // temporary workaround for CI'
+          },
+          {
+            name: '2. 加 ignore 注释逃避检查',
+            file: 'src/views/purchase/CentralizedPackageView.vue',
+            repo: 'tpm-frontend-web',
+            diff: '+ /* eslint-disable @typescript-eslint/no-explicit-any */\n+ const handleExport = (rawPayload: any) => {\n+   console.log(rawPayload);\n+ }'
+          },
+          {
+            name: '3. 下调 JaCoCo 门禁预算',
+            file: 'pom.xml',
+            repo: 'tpm-backend-app',
+            diff: '- <minimum>0.80</minimum>\n+ <minimum>0.50</minimum> <!-- Lowered because new module lacks tests -->'
+          },
+          {
+            name: '4. 分层违规 Controller 直穿 DAO',
+            file: 'src/main/java/com/sys/tpm/controller/DeviceLedgerController.java',
+            repo: 'tpm-backend-app',
+            diff: '+ import com.sys.tpm.dao.DeviceLedgerDao;\n+ @Autowired\n+ private DeviceLedgerDao deviceLedgerDao;\n+\n+ @GetMapping("/quick-list")\n+ public List<Device> quickList() {\n+   return deviceLedgerDao.selectAll();\n+ }'
+          },
+          {
+            name: '5. 擅自删除失败的单测用例',
+            file: 'src/test/java/com/sys/tpm/service/ProcurementContractTest.java',
+            repo: 'tpm-backend-app',
+            diff: '- @Test\n- void testProcurementAmountValidationNegative() {\n-     assertThrows(IllegalArgumentException.class, () -> service.createPlan(-100));\n- }'
+          },
+          {
+            name: '6. 篡改受保护 CI 守卫工作流',
+            file: '.github/workflows/contract-guard.yml',
+            repo: 'agent-control',
+            diff: '- - run: npm run guard:verify --fail-on-violation\n+ - run: npm run guard:verify || true'
+          }
+        ];
+
+        const openAntiWeakeningModal = () => {
+          antiWeakeningModalVisible.value = true;
+          if (!simDiffContent.value) {
+            loadSimPreset(simPresets[0]);
+          }
+        };
+
+        const loadSimPreset = (preset) => {
+          simFilePath.value = preset.file;
+          simRepo.value = preset.repo;
+          simDiffContent.value = preset.diff;
+          simResult.value = null;
+        };
+
+        const runAntiWeakeningSimulate = async () => {
+          if (!simDiffContent.value.trim()) return;
+          simulating.value = true;
+          try {
+            const resp = await fetch('/api/v1/contracts/arbitration/simulate-detector', {
+              method: 'POST',
+              headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                file_path: simFilePath.value.trim(),
+                diff_content: simDiffContent.value.trim(),
+                repo_name: simRepo.value,
+                agent_name: simAgent.value
+              })
+            });
+            if (resp.ok) {
+              simResult.value = await resp.json();
+            } else {
+              const err = await resp.json();
+              showToast('error', '仿真探测失败', err.detail || '检测服务异常');
+            }
+          } catch (e) {
+            showToast('error', '请求失败', e.message);
+          } finally {
+            simulating.value = false;
+          }
+        };
+
+        // 架构仲裁人工裁决处置模态框状态与逻辑
+        const actionModalVisible = ref(false);
+        const actionRow = ref(null);
+        const actionType = ref('confirm_blocked');
+        const actionOperator = ref('TechLead');
+        const actionAdrRef = ref('ADR-2026-TPM-013');
+        const actionReason = ref('');
+        const actionSubmitting = ref(false);
+
+        const openTakeActionModal = (row, defaultAction = 'confirm_blocked') => {
+          actionRow.value = row;
+          actionType.value = defaultAction;
+          actionOperator.value = 'ArchCommittee';
+          actionAdrRef.value = row.adr_reference || 'ADR-2026-TPM-013';
+          actionReason.value = defaultAction === 'grant_adr_exception' 
+            ? '特批用于紧急故障容灾兜底，限期30天内完成契约重构并补充测试' 
+            : '人工复核确认违规代码破坏了架构约束，维持硬阻断，勒令开发方整改';
+          actionModalVisible.value = true;
+        };
+
+        const submitArbitrationAction = async () => {
+          if (!actionRow.value || !actionReason.value.trim()) return;
+          actionSubmitting.value = true;
+          try {
+            const eid = actionRow.value.event_id;
+            const resp = await fetch(`/api/v1/contracts/arbitration/logs/${eid}/action`, {
+              method: 'POST',
+              headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                action: actionType.value,
+                operator: actionOperator.value.trim() || 'TechLead',
+                adr_reference: actionType.value === 'grant_adr_exception' ? actionAdrRef.value.trim() : null,
+                reason: actionReason.value.trim()
+              })
+            });
+            if (resp.ok) {
+              const data = await resp.json();
+              showToast('success', '仲裁处置成功', `事件 ${eid} 状态已更新为: ${data.status}`);
+              actionModalVisible.value = false;
+              if (detailRow.value && detailRow.value.event_id === eid) {
+                detailRow.value.status = data.status;
+                if (actionType.value === 'grant_adr_exception') {
+                  detailRow.value.adr_reference = actionAdrRef.value.trim();
+                  detailRow.value.interception_action = 'adr_exception_granted';
+                } else {
+                  detailRow.value.status = 'confirmed_violation';
+                }
+              }
+              await fetchArbitrationStats();
+              loadData();
+            } else {
+              const err = await resp.json();
+              showToast('error', '仲裁处置失败', err.detail || '处置操作失败');
+            }
+          } catch (e) {
+            showToast('error', '请求失败', e.message);
+          } finally {
+            actionSubmitting.value = false;
           }
         };
 
@@ -6166,6 +6970,24 @@
                   { key: 'test_suite_ref', label: '契约测试套件', truncate: true, cellClass: 'font-mono text-xs text-indigo-300' },
                   { key: 'last_verified_at', label: '最新核验', cellClass: 'font-mono text-slate-400 whitespace-nowrap' }
                 ]
+              },
+              {
+                name: '防弱化拦截与仲裁日志',
+                endpoint: '/api/v1/contracts/arbitration/logs',
+                searchPlaceholder: '搜索事件编号(ARB-EVT)、违规规则、涉事文件、Agent、ADR...',
+                columns: [
+                  { key: 'event_id', label: '事件编号', cellClass: 'font-mono font-bold text-rose-400 whitespace-nowrap' },
+                  { key: 'event_type', label: '违规类型', type: 'badge' },
+                  { key: 'severity', label: '严重度', type: 'badge' },
+                  { key: 'interception_action', label: '处置动作', type: 'badge' },
+                  { key: 'status', label: '仲裁状态', type: 'badge' },
+                  { key: 'rule_name', label: '命中守卫规则', truncate: true, cellClass: 'font-semibold text-white' },
+                  { key: 'target_file', label: '涉事代码/文件路径', truncate: true, cellClass: 'font-mono text-xs text-slate-300' },
+                  { key: 'source_repo', label: '所属仓库', type: 'badge' },
+                  { key: 'operator_or_agent', label: '涉事操作者/Agent', cellClass: 'font-mono text-indigo-300 whitespace-nowrap' },
+                  { key: 'adr_reference', label: 'ADR特批号', cellClass: 'font-mono text-amber-400 whitespace-nowrap' },
+                  { key: 'created_at', label: '拦截时间', cellClass: 'font-mono text-slate-400 whitespace-nowrap' }
+                ]
               }
             ]
           },
@@ -6720,6 +7542,7 @@
           } else if (menuId === 'contracts') {
             nextTick(() => {
               fetchContractStats();
+              fetchArbitrationStats();
             });
           }
         };
@@ -6823,6 +7646,8 @@
             fetchDateStats();
           } else if (tab.endpoint === '/api/v1/extensions/housing-subsidy-records') {
             fetchSubsidyStats();
+          } else if (tab.endpoint === '/api/v1/contracts/arbitration/logs') {
+            fetchArbitrationStats();
           } else if (currentMenuId.value === 'github') {
             fetchGithubStats();
           }
@@ -9572,7 +10397,26 @@
           approved: '已批准',
           changes_requested: '需修改',
           commented: '已评审',
-          dismissed: '已驳回'
+          dismissed: '已驳回',
+
+          // 防弱化与架构仲裁
+          test_assertion_weakened: '断言弱化/吞异常',
+          test_deleted: '测试用例删除',
+          lint_rule_ignored: 'Ignore/Suppress绕过',
+          threshold_lowered: '质量门禁调低',
+          contract_bypassed: '契约未经独立PR',
+          layer_violation: '跨层架构直穿',
+          protected_file_modified: '受保护文件篡改',
+          blocked: '硬阻断拦截',
+          confirmed_violation: '人工确认违规',
+          waived_by_adr: 'ADR特批破例',
+          manual_confirmation_required: '挂起待人工确认',
+          adr_exception_granted: 'ADR破例已授权',
+          manual_waived: '人工复核豁免',
+          pending_review: '待架构师复核',
+          critical: 'CRITICAL (严重)',
+          high: 'HIGH (高危)',
+          medium: 'MEDIUM (中危)'
         };
 
         // 认领执行者映射表
@@ -9654,7 +10498,8 @@
           const base = 'px-2 py-0.5 rounded text-[11px] font-medium font-mono tracking-wide ';
           if ([
             'completed', '已完成', 'merged', '已合并', 'active', '活跃中', 'online', '在线', 
-            'success', '成功', 'published', '已发布', 'result', '已公示', 'low', '低'
+            'success', '成功', 'published', '已发布', 'result', '已公示', 'low', '低',
+            'waived_by_adr', 'adr_exception_granted', 'manual_waived'
           ].includes(v)) {
             return base + 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30';
           }
@@ -9668,13 +10513,13 @@
             'pending', '待处理', 'watchlist', 'draft', '草稿', 'p1', 'p2', 'preferred', '优先',
             'medium', '中', 'manual', '手动创建', 'schedule', '定时调度', 'plan', '执行计划',
             'implementation-plan', '实施方案', 'user', '用户', 'report', '分析报告', 'test', '测试用例/报告',
-            'file', '说明文档', 'document', '技术文档'
+            'file', '说明文档', 'document', '技术文档', 'manual_confirmation_required', 'pending_review'
           ].includes(v)) {
             return base + 'bg-amber-500/10 text-amber-400 border border-amber-500/30';
           }
           if ([
             'failed', '已失败', 'expired', '已超时', 'closed', '已关闭', 'disabled', '已禁用', 
-            'critical', 'p0', 'urgent', '紧急', 'high', '高'
+            'critical', 'p0', 'urgent', '紧急', 'high', '高', 'blocked', 'confirmed_violation'
           ].includes(v)) {
             return base + 'bg-rose-500/10 text-rose-400 border border-rose-500/30';
           }
@@ -9710,6 +10555,7 @@
         // 详情弹窗标题与副标题安全解析
         const detailTitle = computed(() => {
           const r = detailRow.value || {};
+          if (r.event_id) return '架构守卫与防弱化仲裁 · ' + r.event_id;
           if (r.contract_id) return '编码契约规范 · ' + r.contract_id + ' (v' + (r.version || '1.0.0') + ')';
           if (r.person_name) return '人才公示 · ' + r.person_name;
           if (r.position_title) return '岗位详情 · ' + r.position_title;
@@ -9719,6 +10565,9 @@
 
         const detailSubtitle = computed(() => {
           const r = detailRow.value || {};
+          if (r.event_id) {
+            return (r.rule_name || '架构守卫规则') + ' · 所属仓: ' + (r.source_repo || '-') + ' · 涉事方: ' + (r.operator_or_agent || 'AI-Assistant');
+          }
           if (r.contract_id) {
             return (r.title || '') + ' · 模块: ' + (r.service_name || '-') + ' · 责任架构方: ' + (r.owner || '架构组');
           }
@@ -9753,10 +10602,14 @@
             if (subsidySpouseUnitChartInstance && !(subsidySpouseUnitChartInstance.isDisposed && subsidySpouseUnitChartInstance.isDisposed())) subsidySpouseUnitChartInstance.resize();
             if (githubBarChartInstance && !(githubBarChartInstance.isDisposed && githubBarChartInstance.isDisposed())) githubBarChartInstance.resize();
             if (githubPieChartInstance && !(githubPieChartInstance.isDisposed && githubPieChartInstance.isDisposed())) githubPieChartInstance.resize();
+            if (arbitrationTypeChartInstance && !(arbitrationTypeChartInstance.isDisposed && arbitrationTypeChartInstance.isDisposed())) arbitrationTypeChartInstance.resize();
+            if (arbitrationRepoChartInstance && !(arbitrationRepoChartInstance.isDisposed && arbitrationRepoChartInstance.isDisposed())) arbitrationRepoChartInstance.resize();
           });
           window.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
               if (detailVisible.value) detailVisible.value = false;
+              else if (antiWeakeningModalVisible.value) antiWeakeningModalVisible.value = false;
+              else if (actionModalVisible.value) actionModalVisible.value = false;
               else if (editJobModalVisible.value) editJobModalVisible.value = false;
               else if (deleteJobModalVisible.value) deleteJobModalVisible.value = false;
               else if (crawlModalVisible.value) crawlModalVisible.value = false;
@@ -10010,7 +10863,32 @@
           openNewContractModal,
           fillExampleSchema,
           submitNewContract,
-          copyContractSpec
+          copyContractSpec,
+          arbitrationStats,
+          arbitrationTypeChartEl,
+          arbitrationRepoChartEl,
+          fetchArbitrationStats,
+          initArbitrationCharts,
+          antiWeakeningModalVisible,
+          simFilePath,
+          simRepo,
+          simAgent,
+          simDiffContent,
+          simulating,
+          simResult,
+          simPresets,
+          openAntiWeakeningModal,
+          loadSimPreset,
+          runAntiWeakeningSimulate,
+          actionModalVisible,
+          actionRow,
+          actionType,
+          actionOperator,
+          actionAdrRef,
+          actionReason,
+          actionSubmitting,
+          openTakeActionModal,
+          submitArbitrationAction
         };
       }
     }).mount('#app');

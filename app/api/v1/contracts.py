@@ -1,6 +1,8 @@
 import json
+import re
+import uuid
 import yaml
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Any, Dict, List
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, Query, HTTPException, status
@@ -8,7 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc, or_, func
 
 from db.session import get_db
-from app.models.contract import CodeContract, ContractRevision, ContractConsumer
+from app.models.contract import CodeContract, ContractRevision, ContractConsumer, ArbitrationGuardLog
 from app.schemas.pagination import PageResult, paginate_query
 
 router = APIRouter(prefix="/contracts", tags=["Code Contracts"])
@@ -58,6 +60,36 @@ class ConsumerBindRequest(BaseModel):
 class SchemaVerifyRequest(BaseModel):
     contract_type: str = Field("OpenAPI", description="OpenAPI / JSONSchema / TypeScriptType / JavaDTO / Protobuf")
     content: str = Field(..., description="待校验的文本内容")
+
+class GuardLogCreateRequest(BaseModel):
+    event_id: Optional[str] = Field(None, description="事件唯一编号")
+    contract_id: Optional[str] = Field(None, description="关联契约编号")
+    event_type: str = Field(..., description="违规类型: test_assertion_weakened, test_deleted, lint_rule_ignored, threshold_lowered, contract_bypassed, layer_violation, protected_file_modified")
+    source_repo: str = Field("tpm-backend-app", description="源仓库")
+    target_file: str = Field(..., description="涉事文件相对路径")
+    operator_or_agent: str = Field("AI-Assistant", description="涉事操作者或Agent")
+    rule_name: str = Field(..., description="命中守卫规则")
+    diff_snippet: Optional[str] = Field(None, description="违规代码Diff或关键片段")
+    interception_action: str = Field("blocked", description="处置策略: blocked, manual_confirmation_required, adr_exception_granted")
+    severity: str = Field("CRITICAL", description="严重级别: CRITICAL, HIGH, MEDIUM")
+    arbitration_decision: str = Field(..., description="仲裁裁决与阻断原因")
+    adr_reference: Optional[str] = Field(None, description="破例ADR编号")
+    adr_expires_at: Optional[datetime] = Field(None, description="ADR过期时间")
+    status: str = Field("blocked", description="状态: blocked, confirmed_violation, waived_by_adr, pending_review")
+
+class GuardLogActionRequest(BaseModel):
+    action: str = Field(..., description="处置动作: confirm_blocked, grant_adr_exception, manual_waive")
+    operator: str = Field("TechLead", description="处置人签名")
+    adr_reference: Optional[str] = Field(None, description="ADR破例编号，如 ADR-2026-TPM-012")
+    adr_expires_at: Optional[datetime] = Field(None, description="ADR破例有效期截止时间")
+    reason: str = Field(..., description="处置理由说明")
+
+class AntiWeakeningSimulateRequest(BaseModel):
+    file_path: str = Field(..., description="目标文件路径，例如 src/test/java/TestPackage.java")
+    diff_content: str = Field(..., description="变更Diff文本内容 (带+和-)")
+    repo_name: Optional[str] = Field("tpm-backend-app", description="所属仓库")
+    agent_name: Optional[str] = Field("AI-Assistant", description="执行修改的Agent名称")
+
 
 # ----------------------------------------------------------------------
 # 1. 契约全局多维统计指标 (Stats) - 必须在动态路由前声明
@@ -342,6 +374,366 @@ def create_contract(payload: ContractCreateRequest, db: Session = Depends(get_db
         "success": True,
         "message": f"契约 {cid} 创建成功，并已确立初始规范基准 (v{contract.version})",
         "contract_id": contract.contract_id
+    }
+
+# ----------------------------------------------------------------------
+# 6.5. 架构守卫与防弱化仲裁体系 (Arbitration & Guarding Layer)
+# ----------------------------------------------------------------------
+
+def _analyze_diff_for_weakening(file_path: str, diff_content: str, repo_name: str = "tpm-backend-app") -> Dict[str, Any]:
+    matched_rules = []
+    norm_path = (file_path or "").strip().replace("\\", "/")
+
+    # 1. 检查是否修改受保护文件 (CODEOWNERS / AGENTS.md / 迁移脚本 / 契约规范)
+    protected_patterns = [
+        (r"(^|/)(CODEOWNERS|\.github/workflows/.*|AGENTS\.md|CLAUDE\.md|migrations/.*)$", 
+         "GUARD-RULE-PROTECTED-FILE", 
+         "受保护核心守卫/流程配置违规篡改", 
+         "CODEOWNERS、CI工作流、架构规约AGENTS.md及数据库迁移脚本属于受保护架构资产，AI无权直接私自篡改。",
+         "CRITICAL"),
+        (r"(^|/)src/main/resources/contracts/.*",
+         "GUARD-RULE-CONTRACT-BYPASS",
+         "契约文件必须通过独立PR/流程变更",
+         "契约文件变更必须独立提交或走独立PR，并由架构师人工审批，禁止与日常业务代码混同提交。",
+         "CRITICAL")
+    ]
+    for pattern, code, name, reason, sev in protected_patterns:
+        if re.search(pattern, norm_path, re.IGNORECASE):
+            matched_rules.append({
+                "rule_code": code,
+                "rule_name": name,
+                "pattern_matched": f"尝试修改受保护路径: {norm_path}",
+                "snippet": norm_path,
+                "severity": sev,
+                "arbitration_rule": f"架构守卫优先级卡点: {reason}"
+            })
+
+    # 拆分diff行
+    lines = (diff_content or "").splitlines()
+    added_lines = [l[1:].strip() for l in lines if l.startswith('+') and not l.startswith('+++')]
+    removed_lines = [l[1:].strip() for l in lines if l.startswith('-') and not l.startswith('---')]
+
+    # 2. 检查加 lint ignore / suppress warnings 行为
+    lint_ignore_patterns = [
+        (r"eslint-disable", "GUARD-RULE-LINT-IGNORE-ESLINT", "禁止注入 ESLint 忽略指令逃避前端代码审查", "CRITICAL"),
+        (r"@ts-ignore|@ts-nocheck|@ts-expect-error", "GUARD-RULE-LINT-IGNORE-TS", "禁止注入 TypeScript 类型检查抑制指令", "CRITICAL"),
+        (r"@SuppressWarnings\s*\(\s*\"all\"\s*\)", "GUARD-RULE-LINT-IGNORE-JAVA", "禁止注入 @SuppressWarnings(\"all\") 粗暴压制告警", "HIGH"),
+        (r"#\s*(noqa|type:\s*ignore)", "GUARD-RULE-LINT-IGNORE-PY", "禁止通过 # noqa 或 # type: ignore 逃避静态审查", "HIGH"),
+    ]
+    for line in added_lines:
+        for pat, code, desc, sev in lint_ignore_patterns:
+            if re.search(pat, line, re.IGNORECASE):
+                matched_rules.append({
+                    "rule_code": code,
+                    "rule_name": "禁止使用 Ignore/Suppress 抑制规则绕过静态检查",
+                    "pattern_matched": desc,
+                    "snippet": f"+ {line}",
+                    "severity": sev,
+                    "arbitration_rule": "仲裁层规则: 禁止 AI 用加 ignore 弱化约束的方式让检查通过，命中即硬阻断。"
+                })
+
+    # 3. 检查断言被放宽、吞异常或虚假断言
+    weakened_assertion_patterns = [
+        (r"assertEquals\s*\(\s*true\s*,\s*true\s*\)|assertTrue\s*\(\s*true\s*\)|assert\s+True|assert\s+1\s*==\s*1", 
+         "GUARD-RULE-ASSERT-TAUTOLOGY", 
+         "检测到恒真虚假断言 (assertTrue(true))，企图伪造测试通过", "CRITICAL"),
+        (r"catch\s*\([^)]+\)\s*\{\s*\}|catch\s*\([^)]+\)\s*\{\s*//.*?\}|except\s+Exception:\s*pass", 
+         "GUARD-RULE-SWALLOW-EXCEPTION", 
+         "检测到空白 catch/except 块吞掉异常，伪造用例不报错", "CRITICAL"),
+        (r"^//\s*(assert|expect|verify|assertThat)|^\s*#\s*(assert|expect)", 
+         "GUARD-RULE-ASSERT-COMMENTED", 
+         "检测到将原有断言代码注释化，蓄意弱化测试验证", "CRITICAL")
+    ]
+    for line in added_lines:
+        for pat, code, desc, sev in weakened_assertion_patterns:
+            if re.search(pat, line):
+                matched_rules.append({
+                    "rule_code": code,
+                    "rule_name": "禁止放宽断言或吞异常伪造测试通过",
+                    "pattern_matched": desc,
+                    "snippet": f"+ {line}",
+                    "severity": sev,
+                    "arbitration_rule": "仲裁优先级: 契约 > 测试 > 架构规则 > 现有代码 > AI 的判断。测试断言被放宽命中即阻断！"
+                })
+
+    # 4. 检查测试用例被直接删除
+    deleted_tests = [l for l in removed_lines if re.search(r"@Test|def\s+test_|it\s*\(|test\s*\(", l)]
+    added_tests = [l for l in added_lines if re.search(r"@Test|def\s+test_|it\s*\(|test\s*\(", l)]
+    if len(deleted_tests) > len(added_tests):
+        matched_rules.append({
+            "rule_code": "GUARD-RULE-TEST-DELETED",
+            "rule_name": "禁止擅自删除测试用例以规避失败",
+            "pattern_matched": f"检测到删除了 {len(deleted_tests) - len(added_tests)} 个有效测试用例定义",
+            "snippet": f"- {deleted_tests[0]}",
+            "severity": "CRITICAL",
+            "arbitration_rule": "仲裁层规则: 测试用例删除行为视为恶意弱化约束，必须人工审查或走废弃流程。"
+        })
+
+    # 5. 检查覆盖率/门禁阈值调低
+    for r_line in removed_lines:
+        m_old = re.search(r"(minimum|threshold|coverage|branches|lines)[\s\>\:\=]+(0\.[789]\d*|[789]\d)", r_line, re.IGNORECASE)
+        if m_old:
+            for a_line in added_lines:
+                m_new = re.search(r"(minimum|threshold|coverage|branches|lines)[\s\>\:\=]+(0\.[1-6]\d*|[1-6]\d)", a_line, re.IGNORECASE)
+                if m_new:
+                    matched_rules.append({
+                        "rule_code": "GUARD-RULE-THRESHOLD-LOWERED",
+                        "rule_name": "禁止调低质量门禁与单测覆盖率阈值",
+                        "pattern_matched": f"检测到门禁阈值由 {m_old.group(2)} 降至 {m_new.group(2)}",
+                        "snippet": f"- {r_line}\n+ {a_line}",
+                        "severity": "CRITICAL",
+                        "arbitration_rule": "仲裁层规则: 禁止通过降低测试/质量预算门禁掩盖代码缺陷。"
+                    })
+
+    # 6. 检查分层架构违规: Controller 直穿 DAO / Repository
+    if "controller" in norm_path.lower() or "endpoint" in norm_path.lower() or "web" in norm_path.lower():
+        for line in added_lines:
+            if re.search(r"import\s+.*?\.(dao|repository)\.", line, re.IGNORECASE) or re.search(r"@Autowired\s+(private\s+)?(\w+Dao|\w+Repository)", line, re.IGNORECASE):
+                matched_rules.append({
+                    "rule_code": "GUARD-RULE-ARCH-LAYER-VIOLATION",
+                    "rule_name": "禁止表现层 (Controller) 跨层直调持久层 (DAO/Repository)",
+                    "pattern_matched": "检测到 Controller 直接引用 DAO 或 Repository，破坏严格分层架构约束",
+                    "snippet": f"+ {line}",
+                    "severity": "HIGH",
+                    "arbitration_rule": "架构守卫规则: 表现层只允许调用 AppService / DomainService，禁止跨层直穿访问持久层。"
+                })
+
+    violation_detected = len(matched_rules) > 0
+    action = "blocked" if violation_detected else "allowed"
+    severity = "CRITICAL" if any(r["severity"] == "CRITICAL" for r in matched_rules) else ("HIGH" if violation_detected else "NONE")
+
+    if violation_detected:
+        summary = f"架构守卫命中 {len(matched_rules)} 项防弱化规则违规！仲裁层依据【契约 > 测试 > 架构规则 > 现有代码 > AI 判断】铁律，已启动硬阻断拦截。"
+    else:
+        summary = "未检测到防弱化与架构违规行为，符合当前工程契约守卫标准。"
+
+    return {
+        "violation_detected": violation_detected,
+        "action": action,
+        "severity": severity,
+        "matched_rules": matched_rules,
+        "arbitration_summary": summary
+    }
+
+@router.get("/arbitration/stats")
+def get_arbitration_stats(db: Session = Depends(get_db)):
+    """
+    获取防弱化拦截与架构仲裁全景统计数据
+    """
+    total = db.query(func.count(ArbitrationGuardLog.id)).scalar() or 0
+    blocked_count = db.query(func.count(ArbitrationGuardLog.id)).filter(
+        or_(
+            ArbitrationGuardLog.interception_action == "blocked",
+            ArbitrationGuardLog.status == "blocked",
+            ArbitrationGuardLog.status == "confirmed_violation"
+        )
+    ).scalar() or 0
+    waived_count = db.query(func.count(ArbitrationGuardLog.id)).filter(ArbitrationGuardLog.status == "waived_by_adr").scalar() or 0
+    pending_count = db.query(func.count(ArbitrationGuardLog.id)).filter(ArbitrationGuardLog.status == "pending_review").scalar() or 0
+
+    # 违规类型分布
+    type_rows = db.query(ArbitrationGuardLog.event_type, func.count(ArbitrationGuardLog.id)).group_by(ArbitrationGuardLog.event_type).all()
+    by_event_type = [{"event_type": r[0], "count": r[1]} for r in type_rows]
+
+    # 仓库分布
+    repo_rows = db.query(ArbitrationGuardLog.source_repo, func.count(ArbitrationGuardLog.id)).group_by(ArbitrationGuardLog.source_repo).all()
+    by_repo = [{"repo": r[0], "count": r[1]} for r in repo_rows]
+
+    # 严重等级分布
+    sev_rows = db.query(ArbitrationGuardLog.severity, func.count(ArbitrationGuardLog.id)).group_by(ArbitrationGuardLog.severity).all()
+    by_severity = [{"severity": r[0], "count": r[1]} for r in sev_rows]
+
+    # 最近拦截事件
+    recent = db.query(ArbitrationGuardLog).order_by(desc(ArbitrationGuardLog.id)).limit(6).all()
+    recent_events = [
+        {
+            "event_id": item.event_id,
+            "contract_id": item.contract_id,
+            "event_type": item.event_type,
+            "source_repo": item.source_repo,
+            "target_file": item.target_file,
+            "operator_or_agent": item.operator_or_agent,
+            "rule_name": item.rule_name,
+            "severity": item.severity,
+            "action": item.interception_action,
+            "status": item.status,
+            "created_at": item.created_at.isoformat() if item.created_at else None
+        }
+        for item in recent
+    ]
+
+    blocked_rate = round((blocked_count / total * 100), 1) if total > 0 else 100.0
+
+    return {
+        "total_interceptions": total,
+        "blocked_count": blocked_count,
+        "waived_count": waived_count,
+        "pending_count": pending_count,
+        "blocked_rate": blocked_rate,
+        "by_event_type": by_event_type,
+        "by_repo": by_repo,
+        "by_severity": by_severity,
+        "recent_events": recent_events
+    }
+
+@router.get("/arbitration/logs")
+def list_arbitration_logs(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    event_type: Optional[str] = Query(None, description="违规事件类型"),
+    source_repo: Optional[str] = Query(None, description="源仓库"),
+    severity: Optional[str] = Query(None, description="严重等级: CRITICAL, HIGH, MEDIUM"),
+    status: Optional[str] = Query(None, description="状态: blocked, confirmed_violation, waived_by_adr, pending_review"),
+    contract_id: Optional[str] = Query(None, description="关联契约编号"),
+    keyword: Optional[str] = Query(None, description="关键词匹配: 编号/规则/文件/Agent/决策摘要/ADR"),
+    db: Session = Depends(get_db)
+):
+    """
+    分页查询防弱化拦截日志及仲裁记录
+    """
+    query = db.query(ArbitrationGuardLog)
+    if isinstance(event_type, str) and event_type.strip():
+        query = query.filter(ArbitrationGuardLog.event_type == event_type.strip())
+    if isinstance(source_repo, str) and source_repo.strip():
+        query = query.filter(ArbitrationGuardLog.source_repo == source_repo.strip())
+    if isinstance(severity, str) and severity.strip():
+        query = query.filter(ArbitrationGuardLog.severity == severity.strip())
+    if isinstance(status, str) and status.strip():
+        query = query.filter(ArbitrationGuardLog.status == status.strip())
+    if isinstance(contract_id, str) and contract_id.strip():
+        query = query.filter(ArbitrationGuardLog.contract_id == contract_id.strip())
+    if isinstance(keyword, str) and keyword.strip():
+        kw = f"%{keyword.strip()}%"
+        query = query.filter(
+            or_(
+                ArbitrationGuardLog.event_id.ilike(kw),
+                ArbitrationGuardLog.rule_name.ilike(kw),
+                ArbitrationGuardLog.target_file.ilike(kw),
+                ArbitrationGuardLog.operator_or_agent.ilike(kw),
+                ArbitrationGuardLog.arbitration_decision.ilike(kw),
+                ArbitrationGuardLog.adr_reference.ilike(kw)
+            )
+        )
+    query = query.order_by(desc(ArbitrationGuardLog.id))
+
+    def serialize(item: ArbitrationGuardLog):
+        return {
+            "id": item.id,
+            "event_id": item.event_id,
+            "contract_id": item.contract_id,
+            "event_type": item.event_type,
+            "source_repo": item.source_repo,
+            "target_file": item.target_file,
+            "operator_or_agent": item.operator_or_agent,
+            "rule_name": item.rule_name,
+            "diff_snippet": item.diff_snippet,
+            "interception_action": item.interception_action,
+            "severity": item.severity,
+            "arbitration_decision": item.arbitration_decision,
+            "adr_reference": item.adr_reference,
+            "adr_expires_at": item.adr_expires_at.isoformat() if item.adr_expires_at else None,
+            "status": item.status,
+            "created_at": item.created_at.isoformat() if item.created_at else None,
+            "resolved_at": item.resolved_at.isoformat() if item.resolved_at else None
+        }
+
+    return paginate_query(query, page if isinstance(page, int) else 1, page_size if isinstance(page_size, int) else 20, serialize)
+
+@router.post("/arbitration/logs", status_code=status.HTTP_201_CREATED)
+def create_arbitration_log(payload: GuardLogCreateRequest, db: Session = Depends(get_db)):
+    """
+    上报并持久化防弱化架构守卫拦截事件 (硬阻断归档)
+    """
+    event_id = payload.event_id.strip() if payload.event_id and payload.event_id.strip() else f"ARB-EVT-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
+    existing = db.query(ArbitrationGuardLog).filter(ArbitrationGuardLog.event_id == event_id).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"拦截事件编号 '{event_id}' 已存在")
+
+    log_entry = ArbitrationGuardLog(
+        event_id=event_id,
+        contract_id=payload.contract_id.strip() if payload.contract_id else None,
+        event_type=payload.event_type.strip(),
+        source_repo=payload.source_repo.strip(),
+        target_file=payload.target_file.strip(),
+        operator_or_agent=payload.operator_or_agent.strip(),
+        rule_name=payload.rule_name.strip(),
+        diff_snippet=payload.diff_snippet.strip() if payload.diff_snippet else None,
+        interception_action=payload.interception_action.strip(),
+        severity=payload.severity.strip(),
+        arbitration_decision=payload.arbitration_decision.strip(),
+        adr_reference=payload.adr_reference.strip() if payload.adr_reference else None,
+        adr_expires_at=payload.adr_expires_at,
+        status=payload.status.strip(),
+        created_at=datetime.utcnow()
+    )
+    db.add(log_entry)
+    db.commit()
+    db.refresh(log_entry)
+    return {
+        "success": True,
+        "message": f"架构守卫拦截事件 '{event_id}' 上报并硬阻断归档成功",
+        "event_id": log_entry.event_id
+    }
+
+@router.post("/arbitration/logs/{event_id}/action")
+def take_arbitration_action(event_id: str, payload: GuardLogActionRequest, db: Session = Depends(get_db)):
+    """
+    针对防弱化拦截事件执行仲裁处理 (人工确认违规/授予ADR破例例外/人工豁免)
+    """
+    eid = event_id.strip()
+    log_entry = db.query(ArbitrationGuardLog).filter(ArbitrationGuardLog.event_id == eid).first()
+    if not log_entry:
+        raise HTTPException(status_code=404, detail=f"未找到事件编号为 '{eid}' 的拦截日志")
+
+    now = datetime.utcnow()
+    if payload.action == "grant_adr_exception":
+        if not payload.adr_reference or not payload.adr_reference.strip():
+            raise HTTPException(status_code=400, detail="授予破例例外必须提供有效 ADR 编号（例如 ADR-2026-TPM-012）")
+        log_entry.status = "waived_by_adr"
+        log_entry.interception_action = "adr_exception_granted"
+        log_entry.adr_reference = payload.adr_reference.strip()
+        log_entry.adr_expires_at = payload.adr_expires_at or (now + timedelta(days=30))
+        log_entry.resolved_at = now
+        log_entry.arbitration_decision += f"\n[ADR特批处置 - {now.strftime('%Y-%m-%d %H:%M:%S')} 由 {payload.operator}]: 破例理由: {payload.reason}。关联ADR: {payload.adr_reference}，过期时间: {log_entry.adr_expires_at.strftime('%Y-%m-%d')}。"
+    elif payload.action == "confirm_blocked":
+        log_entry.status = "confirmed_violation"
+        log_entry.interception_action = "blocked"
+        log_entry.resolved_at = now
+        log_entry.arbitration_decision += f"\n[人工仲裁确认违规阻断 - {now.strftime('%Y-%m-%d %H:%M:%S')} 由 {payload.operator}]: {payload.reason}"
+    elif payload.action == "manual_waive":
+        log_entry.status = "waived_by_adr"
+        log_entry.interception_action = "manual_waived"
+        log_entry.resolved_at = now
+        log_entry.arbitration_decision += f"\n[人工复核豁免 - {now.strftime('%Y-%m-%d %H:%M:%S')} 由 {payload.operator}]: {payload.reason}"
+    else:
+        raise HTTPException(status_code=400, detail=f"不支持的处置动作: {payload.action}")
+
+    db.commit()
+    db.refresh(log_entry)
+    return {
+        "success": True,
+        "message": f"拦截事件 {eid} 已完成仲裁处置: {payload.action}",
+        "status": log_entry.status,
+        "event_id": log_entry.event_id
+    }
+
+@router.post("/arbitration/simulate-detector")
+def simulate_anti_weakening_detector(payload: AntiWeakeningSimulateRequest):
+    """
+    防弱化架构守卫实时仿真探测工具：
+    输入代码 diff 或文件修改，自动扫描放宽断言、加 ignore 注释、删测试、降低阈值、跨层调用等高危行为
+    """
+    analysis = _analyze_diff_for_weakening(payload.file_path, payload.diff_content, payload.repo_name)
+    return {
+        "file_path": payload.file_path,
+        "repo_name": payload.repo_name,
+        "agent_name": payload.agent_name,
+        "violation_detected": analysis["violation_detected"],
+        "action": analysis["action"],
+        "severity": analysis["severity"],
+        "matched_rules": analysis["matched_rules"],
+        "arbitration_summary": analysis["arbitration_summary"],
+        "timestamp": datetime.utcnow().isoformat()
     }
 
 # ----------------------------------------------------------------------

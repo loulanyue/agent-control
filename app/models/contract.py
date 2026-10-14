@@ -54,3 +54,24 @@ class ContractConsumer(Base):
     last_verified_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class ArbitrationGuardLog(Base):
+    __tablename__ = "arbitration_guard_logs"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    event_id = Column(String(64), unique=True, nullable=False, index=True) # 如 ARB-EVT-20261014-001
+    contract_id = Column(String(64), nullable=True, index=True) # 关联契约编号，如 CTR-TPM-PKG-001
+    event_type = Column(String(64), nullable=False, index=True) # test_assertion_weakened, test_deleted, lint_rule_ignored, threshold_lowered, contract_bypassed, layer_violation, protected_file_modified
+    source_repo = Column(String(128), nullable=False, default="tpm-backend-app") # tpm-backend-app, tpm-frontend-web, agent-control
+    target_file = Column(String(512), nullable=False) # 违规文件相对路径
+    operator_or_agent = Column(String(128), nullable=False, default="AI-Assistant") # 涉事Agent或开发者
+    rule_name = Column(String(256), nullable=False) # 命中的守卫规则名称
+    diff_snippet = Column(Text, nullable=True) # 违规 diff 或关键片段
+    interception_action = Column(String(64), nullable=False, default="blocked") # blocked, manual_confirmation_required, adr_exception_granted
+    severity = Column(String(32), nullable=False, default="CRITICAL") # CRITICAL, HIGH, MEDIUM
+    arbitration_decision = Column(Text, nullable=False) # 仲裁裁决与阻断原因
+    adr_reference = Column(String(128), nullable=True) # 破例ADR编号（如 ADR-2026-TPM-012）
+    adr_expires_at = Column(DateTime, nullable=True) # ADR例外过期时间
+    status = Column(String(32), nullable=False, default="blocked") # blocked, confirmed_violation, waived_by_adr, pending_review
+    created_at = Column(DateTime, default=datetime.utcnow)
+    resolved_at = Column(DateTime, nullable=True)

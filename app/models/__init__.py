@@ -14,7 +14,7 @@ from app.models.extensions import (
     SoftExamKnowledgePoint, SelfProjectIteration,
     BitcoinMiningRun, TwitterFrontierTechPost
 )
-from app.models.contract import CodeContract, ContractRevision, ContractConsumer
+from app.models.contract import CodeContract, ContractRevision, ContractConsumer, ArbitrationGuardLog
 
 __all__ = [
     "Agent", "ApiClient",
@@ -28,5 +28,5 @@ __all__ = [
     "JobPosition", "JobRequirement",
     "SoftExamKnowledgePoint", "SelfProjectIteration",
     "BitcoinMiningRun", "TwitterFrontierTechPost",
-    "CodeContract", "ContractRevision", "ContractConsumer"
+    "CodeContract", "ContractRevision", "ContractConsumer", "ArbitrationGuardLog"
 ]
