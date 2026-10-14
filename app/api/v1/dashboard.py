@@ -9,7 +9,7 @@ from app.models.graph import GraphDefinition, GraphRun
 from app.models.rule import Rule, RuleSource
 from app.models.schedule import TaskSchedule, ScheduleRun
 from app.models.extensions import (
-    HzTalentNotice, HzNoticeCrawlRun,
+    HzTalentNotice, HzHousingSubsidyRecord, HzNoticeCrawlRun,
     HfTalentRecord, HfTalentCrawlRun,
     GithubPrLifecycle, GithubContribution,
     PartTimeOpportunity, PartTimeScanRun,
@@ -33,7 +33,8 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
             "total_notices": db.query(func.count(HzTalentNotice.id)).scalar() or 0,
             "crawl_runs": db.query(func.count(HzNoticeCrawlRun.id)).scalar() or 0,
             "personal_notices": db.query(func.count(HzTalentNotice.id)).filter(HzTalentNotice.notice_type == "personal").scalar() or 0,
-            "list_notices": db.query(func.count(HzTalentNotice.id)).filter(HzTalentNotice.notice_type == "list").scalar() or 0
+            "list_notices": db.query(func.count(HzTalentNotice.id)).filter(HzTalentNotice.notice_type == "list").scalar() or 0,
+            "housing_subsidies": db.query(func.count(HzHousingSubsidyRecord.id)).scalar() or 0
         },
         "hf_talent": {
             "total_records": db.query(func.count(HfTalentRecord.id)).filter(HfTalentRecord.record_type == "publicity").scalar() or 0,

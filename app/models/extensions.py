@@ -30,6 +30,23 @@ class HzTalentNotice(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class HzHousingSubsidyRecord(Base):
+    __tablename__ = "hz_housing_subsidy_records"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    notice_id = Column(String(64), nullable=False, index=True)
+    seq = Column(String(32), nullable=False)
+    biz_type = Column(String(128), default="")
+    applicant_name = Column(String(128), default="", index=True)
+    applicant_unit = Column(String(256), default="", index=True)
+    applicant_talent_type = Column(String(256), default="", index=True)
+    spouse_name = Column(String(128), default="")
+    spouse_unit = Column(String(256), default="")
+    publicity_period = Column(String(128), default="")
+    publish_date = Column(Date, nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class HzNoticeCrawlRun(Base):
     __tablename__ = "hz_notice_crawl_runs"
 

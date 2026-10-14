@@ -524,7 +524,7 @@
       <!-- 搜索与筛选工具栏 -->
       <section class="p-4 border-b border-slate-800/80 bg-slate-900/20 flex flex-wrap items-center justify-between gap-3">
         <!-- 人才公示专属多维筛选栏 (支持单独按日期、按分类模糊搜索、出生年份、排序、综合关键词) -->
-        <div v-if="currentSubTab.endpoint === '/api/v1/extensions/talent-notices' || currentSubTab.endpoint === '/api/v1/extensions/hf-talent-records'" class="flex flex-wrap items-center gap-2.5 flex-1 min-w-[320px]">
+        <div v-if="currentSubTab.endpoint === '/api/v1/extensions/talent-notices' || currentSubTab.endpoint === '/api/v1/extensions/hf-talent-records' || currentSubTab.endpoint === '/api/v1/extensions/housing-subsidy-records'" class="flex flex-wrap items-center gap-2.5 flex-1 min-w-[320px]">
           <!-- 1. 按公示发布日期筛选 -->
           <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
             <i class="fa-regular fa-calendar text-indigo-400"></i>
@@ -585,6 +585,30 @@
             </button>
           </div>
 
+          <!-- 3.1 伴侣就职关系筛选 (仅杭州住房补贴专属) -->
+          <div v-if="currentSubTab.endpoint === '/api/v1/extensions/housing-subsidy-records'" class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+            <i class="fa-solid fa-heart text-pink-400"></i>
+            <span class="text-slate-400 text-[11px] select-none">伴侣关系:</span>
+            <select
+              v-model="filterSpouseRelation"
+              @change="handleSearch"
+              class="bg-transparent text-slate-200 text-xs focus:outline-none cursor-pointer font-medium">
+              <option value="" class="bg-slate-900 text-slate-400">全部家庭状态</option>
+              <option value="same" class="bg-slate-900 text-emerald-300 font-semibold">夫妻同单位 (15对)</option>
+              <option value="diff" class="bg-slate-900 text-sky-300 font-medium">夫妻跨单位 (139人)</option>
+              <option value="no_unit" class="bg-slate-900 text-amber-300">伴侣自由/待业 (37人)</option>
+              <option value="single" class="bg-slate-900 text-slate-400">未填伴侣/单身 (97人)</option>
+              <option value="has_spouse" class="bg-slate-900 text-pink-300">全部已婚 (191人)</option>
+            </select>
+            <button
+              v-if="filterSpouseRelation"
+              @click="filterSpouseRelation = ''; handleSearch()"
+              class="text-slate-400 hover:text-rose-400 text-[10px] ml-1"
+              title="清除伴侣关系筛选">
+              <i class="fa-solid fa-circle-xmark"></i>
+            </button>
+          </div>
+
           <!-- 4. 按人才分类模糊搜索 -->
           <div class="relative min-w-[170px] max-w-[210px]">
             <i class="fa-solid fa-tags absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
@@ -592,7 +616,7 @@
               type="text"
               v-model="filterCategory"
               @keyup.enter="handleSearch"
-              placeholder="分类搜索 (如: E类, 博士)..."
+              :placeholder="currentSubTab.endpoint === '/api/v1/extensions/housing-subsidy-records' ? '类型搜索 (如: D-市级)...' : '分类搜索 (如: E类, 博士)...'"
               class="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
             <button
               v-if="filterCategory"
@@ -605,12 +629,22 @@
           <!-- 5. 快捷类别标签 -->
           <div class="hidden xl:flex items-center gap-1">
             <button
-              v-for="cat in ['E类', 'D类', 'C类', '具有博士学位']"
+              v-for="cat in (currentSubTab.endpoint === '/api/v1/extensions/housing-subsidy-records' ? ['D-市级领军', 'C-省级领军', 'B-国家级领军', 'A-顶尖人才'] : ['E类', 'D类', 'C类', '具有博士学位'])"
               :key="cat"
               @click="setQuickCategory(cat)"
               :class="filterCategory === cat ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 border-slate-700'"
               class="px-2 py-1 rounded text-[11px] border transition font-mono">
               [[ cat ]]
+            </button>
+            <button
+              v-if="currentSubTab.endpoint === '/api/v1/extensions/housing-subsidy-records'"
+              @click="toggleFilterMatchedTalent"
+              :class="filterMatchedTalent ? 'bg-sky-600 text-white border-sky-400 font-bold shadow-sm' : 'bg-slate-800/90 text-sky-400 hover:text-sky-300 hover:bg-slate-800 border-sky-500/30'"
+              class="px-2 py-1 rounded text-[11px] border transition inline-flex items-center gap-1 font-sans ml-0.5"
+              title="仅筛选申请人与杭州企业高层次人才申报公示匹配成功的记录">
+              <i class="fa-solid fa-award text-amber-400 text-xs"></i>
+              <span>已关联企业人才</span>
+              <span class="px-1 py-0.2 rounded text-[10px] bg-sky-500/20 text-sky-200 font-mono">6人</span>
             </button>
           </div>
 
@@ -1828,6 +1862,437 @@
           </div>
         </div>
 
+        <!-- 杭州高层次人才住房补贴专属多维可视化看板 (公司/人才类型/伴侣多维分析) -->
+        <div
+          v-if="currentMenuId === 'talent' && currentSubTab.endpoint === '/api/v1/extensions/housing-subsidy-records'"
+          class="mb-4 bg-slate-900/70 border border-slate-800/90 rounded-xl overflow-hidden shadow-xl backdrop-blur">
+          
+          <!-- 看板 Header 与操作栏 -->
+          <div class="px-4 py-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-850/60">
+            <div class="flex items-center space-x-3">
+              <!-- 看板主 Tab 切换: 综合全景 / 申报企业与人才类型 / 伴侣家庭生态 -->
+              <div class="flex bg-slate-950 p-1 rounded-lg border border-slate-700/80 shadow-inner">
+                <button
+                  @click="switchSubsidyActiveTab('all')"
+                  :class="subsidyActiveTab === 'all' ? 'bg-indigo-600 text-white font-semibold shadow-md' : 'text-slate-400 hover:text-white'"
+                  class="px-3 py-1 rounded-md text-xs transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-shapes text-[11px]"></i>
+                  <span>综合全景看板</span>
+                  <span class="text-[9px] bg-indigo-500/20 text-indigo-300 px-1 py-0.2 rounded font-mono font-bold border border-indigo-500/30">四维透视</span>
+                </button>
+                <button
+                  @click="switchSubsidyActiveTab('company')"
+                  :class="subsidyActiveTab === 'company' ? 'bg-indigo-600 text-white font-semibold shadow-md' : 'text-slate-400 hover:text-white'"
+                  class="px-3 py-1 rounded-md text-xs transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-building text-[11px]"></i>
+                  <span>申报企事业单位与人才类型</span>
+                  <span class="text-[9px] bg-purple-500/20 text-purple-300 px-1 py-0.2 rounded font-mono font-bold border border-purple-500/30">194家单位</span>
+                </button>
+                <button
+                  @click="switchSubsidyActiveTab('spouse')"
+                  :class="subsidyActiveTab === 'spouse' ? 'bg-indigo-600 text-white font-semibold shadow-md' : 'text-slate-400 hover:text-white'"
+                  class="px-3 py-1 rounded-md text-xs transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-heart text-[11px] text-pink-400"></i>
+                  <span>伴侣家庭画像与就职生态</span>
+                  <span class="text-[9px] bg-pink-500/20 text-pink-300 px-1 py-0.2 rounded font-mono font-bold border border-pink-500/30">66.3%已婚率</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 右侧控制区: Top N, 视图切换, 刷新, 收起/展开 -->
+            <div class="flex items-center flex-wrap gap-2 text-xs">
+              <!-- Top N 切换 -->
+              <div v-if="subsidyActiveTab === 'all' || subsidyActiveTab === 'company'" class="flex bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-[11px]">
+                <button
+                  v-for="n in [10, 15, 20]"
+                  :key="n"
+                  @click="changeSubsidyTopN(n)"
+                  :class="subsidyTopN === n ? 'bg-indigo-600 text-white font-semibold shadow' : 'text-slate-400 hover:text-white'"
+                  class="px-2 py-0.5 rounded transition">
+                  Top [[ n ]]
+                </button>
+              </div>
+
+              <!-- 视图切换: 图表 vs 排名表 -->
+              <div v-if="subsidyActiveTab === 'company'" class="flex bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-[11px]">
+                <button
+                  @click="subsidyViewMode = 'chart'"
+                  :class="subsidyViewMode === 'chart' ? 'bg-slate-700 text-indigo-300 font-semibold' : 'text-slate-400 hover:text-white'"
+                  class="px-2 py-0.5 rounded transition flex items-center gap-1">
+                  <i class="fa-solid fa-chart-column text-[10px]"></i>
+                  图表
+                </button>
+                <button
+                  @click="subsidyViewMode = 'table'"
+                  :class="subsidyViewMode === 'table' ? 'bg-slate-700 text-indigo-300 font-semibold' : 'text-slate-400 hover:text-white'"
+                  class="px-2 py-0.5 rounded transition flex items-center gap-1">
+                  <i class="fa-solid fa-table-list text-[10px]"></i>
+                  排名表
+                </button>
+              </div>
+
+              <!-- 刷新统计数据按钮 -->
+              <button
+                @click="fetchSubsidyStats"
+                :disabled="subsidyStatsLoading"
+                class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 text-xs flex items-center gap-1 transition"
+                title="重新计算杭州住房补贴公示统计">
+                <i :class="subsidyStatsLoading ? 'fa-solid fa-circle-notch fa-spin text-indigo-400' : 'fa-solid fa-rotate-right text-slate-400'"></i>
+                <span>刷新</span>
+              </button>
+
+              <!-- 折叠/展开看板按钮 -->
+              <button
+                @click="subsidyChartCollapsed = !subsidyChartCollapsed; if (!subsidyChartCollapsed) renderAllSubsidyCharts()"
+                class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 text-xs flex items-center gap-1 transition"
+                :title="subsidyChartCollapsed ? '展开分析看板' : '收起分析看板'">
+                <i :class="subsidyChartCollapsed ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-up'"></i>
+                <span>[[ subsidyChartCollapsed ? '展开看板' : '收起' ]]</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 顶部 KPI 指标速览栏 -->
+          <div class="px-4 py-2.5 bg-slate-950/40 border-b border-slate-800/80 grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+            <!-- 指标 1: 补贴申请公示总人数 -->
+            <div class="bg-indigo-500/5 p-2.5 rounded-lg border border-indigo-500/20 flex items-center justify-between">
+              <div>
+                <span class="text-indigo-400 text-[11px] font-semibold flex items-center gap-1">
+                  <i class="fa-solid fa-house-chimney text-[10px]"></i>
+                  领补公示总人数
+                </span>
+                <div class="text-[10px] text-slate-400 mt-0.5">覆盖企事业单位</div>
+              </div>
+              <div class="text-right">
+                <div class="font-bold text-indigo-300 font-mono text-base">[[ subsidyStats?.summary?.total_records || 288 ]] <span class="text-xs text-indigo-400 font-normal">人</span></div>
+                <div class="text-[10px] font-mono text-slate-400">[[ subsidyStats?.summary?.total_companies || 194 ]] 家</div>
+              </div>
+            </div>
+
+            <!-- 指标 2: 领军人才层次梯队 -->
+            <div class="bg-purple-500/5 p-2.5 rounded-lg border border-purple-500/20 flex items-center justify-between">
+              <div>
+                <span class="text-purple-400 text-[11px] font-semibold flex items-center gap-1">
+                  <i class="fa-solid fa-award text-[10px] text-amber-400"></i>
+                  领军人才结构
+                </span>
+                <div class="text-[10px] text-slate-400 mt-0.5">A/B/C/D 层次</div>
+              </div>
+              <div class="text-right">
+                <div class="font-bold text-purple-300 font-mono text-xs flex items-center gap-1.5 justify-end">
+                  <span class="text-red-400 font-semibold" title="A类顶尖人才">A: 1</span>
+                  <span class="text-amber-400 font-semibold" title="B类国家级领军">B: 9</span>
+                  <span class="text-orange-400 font-semibold" title="C类省级领军">C: 57</span>
+                  <span class="text-purple-300 font-bold" title="D类市级领军">D: 221</span>
+                </div>
+                <div class="text-[10px] text-purple-400/80 mt-0.5">高层级领跑全省</div>
+              </div>
+            </div>
+
+            <!-- 指标 3: 伴侣家庭覆盖率 -->
+            <div
+              @click="filterBySpouseRelation('has_spouse', '已婚有伴侣')"
+              class="bg-pink-500/5 p-2.5 rounded-lg border border-pink-500/20 flex items-center justify-between cursor-pointer hover:bg-pink-500/10 transition group"
+              title="点击快速筛选所有填报伴侣的申报人名单">
+              <div>
+                <span class="text-pink-400 text-[11px] font-semibold flex items-center gap-1">
+                  <i class="fa-solid fa-ring text-[10px]"></i>
+                  申报人有伴侣率
+                </span>
+                <div class="text-[10px] text-slate-400 mt-0.5 group-hover:text-pink-300 transition">已婚申报家庭</div>
+              </div>
+              <div class="text-right">
+                <div class="font-bold text-pink-300 font-mono text-base">[[ subsidyStats?.summary?.married_rate || 66.3 ]]%</div>
+                <div class="text-[10px] font-mono text-slate-400">[[ subsidyStats?.summary?.has_spouse_count || 191 ]] 人已婚 / [[ subsidyStats?.summary?.no_spouse_count || 97 ]] 人未填</div>
+              </div>
+            </div>
+
+            <!-- 指标 4: 夫妻协同就职 -->
+            <div
+              @click="filterBySpouseRelation('same', '夫妻同单位')"
+              class="bg-emerald-500/5 p-2.5 rounded-lg border border-emerald-500/20 flex items-center justify-between cursor-pointer hover:bg-emerald-500/10 transition group"
+              title="点击快速筛选夫妻在同单位就职的申报记录 (共15对)">
+              <div>
+                <span class="text-emerald-400 text-[11px] font-semibold flex items-center gap-1">
+                  <i class="fa-solid fa-users text-[10px]"></i>
+                  夫妻同单位 (双职工)
+                </span>
+                <div class="text-[10px] text-slate-400 mt-0.5 group-hover:text-emerald-300 transition">点击一键穿透下钻</div>
+              </div>
+              <div class="text-right">
+                <div class="font-bold text-emerald-300 font-mono text-base">[[ subsidyStats?.summary?.same_unit_count || 15 ]] <span class="text-xs text-emerald-400 font-normal">对</span></div>
+                <div class="text-[10px] font-mono text-slate-400">跨单位 [[ subsidyStats?.summary?.diff_unit_count || 139 ]] 人</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 内容主体区 (支持折叠) -->
+          <div v-show="!subsidyChartCollapsed" class="p-4 bg-slate-900/40">
+            <!-- 筛选状态条提示 -->
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div class="flex items-center gap-2 text-slate-400 text-[11px]">
+                <i class="fa-solid fa-circle-info text-indigo-400"></i>
+                <span>点击图表中的柱体、环形扇区或联动标签，可直接联动过滤下方 288 条公示明细</span>
+              </div>
+              <!-- 活跃筛选标签展示 -->
+              <div class="flex items-center flex-wrap gap-2">
+                <div v-if="searchKeyword" class="flex items-center gap-1.5 bg-indigo-950/80 border border-indigo-700/60 px-2.5 py-0.5 rounded-full text-indigo-200 text-xs">
+                  <span>搜索/单位:</span>
+                  <span class="font-bold text-white">[[ searchKeyword ]]</span>
+                  <button @click="searchKeyword = ''; handleSearch()" class="text-indigo-400 hover:text-rose-400 ml-1">
+                    <i class="fa-solid fa-circle-xmark"></i>
+                  </button>
+                </div>
+                <div v-if="filterCategory" class="flex items-center gap-1.5 bg-purple-950/80 border border-purple-700/60 px-2.5 py-0.5 rounded-full text-purple-200 text-xs">
+                  <span>人才类型:</span>
+                  <span class="font-bold text-white">[[ filterCategory ]]</span>
+                  <button @click="filterCategory = ''; handleSearch()" class="text-purple-400 hover:text-rose-400 ml-1">
+                    <i class="fa-solid fa-circle-xmark"></i>
+                  </button>
+                </div>
+                <div v-if="filterSpouseRelation" class="flex items-center gap-1.5 bg-pink-950/80 border border-pink-700/60 px-2.5 py-0.5 rounded-full text-pink-200 text-xs">
+                  <span>伴侣关系:</span>
+                  <span class="font-bold text-white">[[ getSpouseRelationLabel(filterSpouseRelation) ]]</span>
+                  <button @click="filterSpouseRelation = ''; handleSearch()" class="text-pink-400 hover:text-rose-400 ml-1">
+                    <i class="fa-solid fa-circle-xmark"></i>
+                  </button>
+                </div>
+                <button
+                  v-if="searchKeyword || filterCategory || filterSpouseRelation"
+                  @click="clearSubsidyFilters"
+                  class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded border border-slate-700 text-[11px] transition">
+                  清除全部筛选
+                </button>
+              </div>
+            </div>
+
+            <!-- 图表与数据主体 -->
+            <div class="space-y-4">
+              <!-- 第一行: 公司排行榜 (左 7) + 人才类型环形图 (右 5) -->
+              <div v-show="subsidyActiveTab === 'all' || subsidyActiveTab === 'company'" class="space-y-4">
+                <!-- 图表模式 -->
+                <div v-show="subsidyViewMode === 'chart' || subsidyActiveTab === 'all'" class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                  <div :class="subsidyActiveTab === 'company' ? 'lg:col-span-8' : 'lg:col-span-7'" class="bg-slate-950/60 rounded-xl border border-slate-800/80 p-3 flex flex-col">
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                        <i class="fa-solid fa-building text-indigo-400"></i>
+                        重点申报企事业单位人才梯队排行 (Top [[ subsidyTopN ]])
+                      </span>
+                      <div class="flex items-center gap-3 text-[11px] text-slate-400 font-mono">
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-red-500"></span>A类</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-amber-400"></span>B类</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-orange-400"></span>C类</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-purple-400"></span>D类</span>
+                      </div>
+                    </div>
+                    <div ref="subsidyCompanyChartEl" class="w-full" style="height: 340px;"></div>
+                  </div>
+
+                  <div :class="subsidyActiveTab === 'company' ? 'lg:col-span-4' : 'lg:col-span-5'" class="bg-slate-950/60 rounded-xl border border-slate-800/80 p-3 flex flex-col justify-between">
+                    <div>
+                      <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                          <i class="fa-solid fa-chart-pie text-purple-400"></i>
+                          领军人才层次类型分布占比
+                        </span>
+                        <span class="text-[10px] text-slate-500 font-mono">A/B/C/D 结构</span>
+                      </div>
+                      <div ref="subsidyTalentTypeChartEl" class="w-full" style="height: 240px;"></div>
+                    </div>
+                    <!-- 快捷点击标签 -->
+                    <div class="mt-2 pt-2 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-center text-[11px] font-mono">
+                      <button
+                        @click="filterBySubsidyTalentType('A-顶尖人才')"
+                        :class="filterCategory === 'A-顶尖人才' ? 'bg-red-600 text-white font-bold' : 'bg-red-500/10 text-red-300 hover:bg-red-500/20 border-red-500/20 border'"
+                        class="p-1 rounded transition" title="筛选A类顶尖人才">
+                        A类 (1人)
+                      </button>
+                      <button
+                        @click="filterBySubsidyTalentType('B-国家级领军')"
+                        :class="filterCategory === 'B-国家级领军' ? 'bg-amber-600 text-white font-bold' : 'bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 border-amber-500/20 border'"
+                        class="p-1 rounded transition" title="筛选B类国家级领军人才">
+                        B类 (9人)
+                      </button>
+                      <button
+                        @click="filterBySubsidyTalentType('C-省级领军')"
+                        :class="filterCategory === 'C-省级领军' ? 'bg-orange-600 text-white font-bold' : 'bg-orange-500/10 text-orange-300 hover:bg-orange-500/20 border-orange-500/20 border'"
+                        class="p-1 rounded transition" title="筛选C类省级领军人才">
+                        C类 (57人)
+                      </button>
+                      <button
+                        @click="filterBySubsidyTalentType('D-市级领军')"
+                        :class="filterCategory === 'D-市级领军' ? 'bg-purple-600 text-white font-bold' : 'bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 border-purple-500/20 border'"
+                        class="p-1 rounded transition" title="筛选D类市级领军人才">
+                        D类 (221人)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 排名表模式 -->
+                <div v-show="subsidyViewMode === 'table' && subsidyActiveTab === 'company'" class="overflow-x-auto rounded-xl border border-slate-800/80 bg-slate-950/60">
+                  <table class="min-w-full text-left text-xs border-collapse whitespace-nowrap">
+                    <thead class="bg-slate-900 border-b border-slate-800 text-slate-400 uppercase tracking-wider font-mono">
+                      <tr>
+                        <th class="px-4 py-2.5">排名</th>
+                        <th class="px-4 py-2.5">申报单位名称</th>
+                        <th class="px-3 py-2.5 text-right">申领总人数</th>
+                        <th class="px-3 py-2.5 text-right text-red-400">A类顶尖</th>
+                        <th class="px-3 py-2.5 text-right text-amber-400">B类领军</th>
+                        <th class="px-3 py-2.5 text-right text-orange-400">C类省级</th>
+                        <th class="px-3 py-2.5 text-right text-purple-400">D类市级</th>
+                        <th class="px-3 py-2.5 text-right text-pink-400">已婚人数</th>
+                        <th class="px-4 py-2.5 text-right">占比</th>
+                        <th class="px-4 py-2.5 text-right">快捷操作</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/50">
+                      <tr
+                        v-for="(c, idx) in (subsidyStats?.top_companies || [])"
+                        :key="c.company"
+                        class="hover:bg-slate-800/40 transition group">
+                        <td class="px-4 py-2 font-mono text-slate-500 group-hover:text-slate-300">
+                          <span :class="idx < 3 ? 'w-5 h-5 rounded-full bg-indigo-600/30 text-indigo-300 flex items-center justify-center font-bold text-[11px] border border-indigo-500/40' : ''">
+                            [[ idx + 1 ]]
+                          </span>
+                        </td>
+                        <td class="px-4 py-2 font-semibold text-slate-200 group-hover:text-indigo-300 cursor-pointer" @click="filterBySubsidyCompany(c.company)">
+                          [[ c.company ]]
+                        </td>
+                        <td class="px-3 py-2 text-right font-mono font-bold text-white">[[ c.total ]] 人</td>
+                        <td class="px-3 py-2 text-right font-mono font-medium text-red-400">[[ c.a_count || '-' ]]</td>
+                        <td class="px-3 py-2 text-right font-mono font-medium text-amber-400">[[ c.b_count || '-' ]]</td>
+                        <td class="px-3 py-2 text-right font-mono font-medium text-orange-400">[[ c.c_count || '-' ]]</td>
+                        <td class="px-3 py-2 text-right font-mono font-medium text-purple-400">[[ c.d_count || '-' ]]</td>
+                        <td class="px-3 py-2 text-right font-mono font-medium text-pink-400">[[ c.married_count || 0 ]]</td>
+                        <td class="px-4 py-2 text-right font-mono text-slate-400">
+                          [[ ((c.total / (subsidyStats?.summary?.total_records || 1)) * 100).toFixed(1) ]]%
+                        </td>
+                        <td class="px-4 py-2 text-right">
+                          <button
+                            @click="filterBySubsidyCompany(c.company)"
+                            class="px-2 py-0.5 rounded bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 text-[11px] transition">
+                            查看名单
+                          </button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- 第二行: 夫妻就职关系分布 (左 5) + 伴侣热门就职单位 Top 10 (右 7) -->
+              <div v-show="subsidyActiveTab === 'all' || subsidyActiveTab === 'spouse'" class="space-y-4">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                  <div :class="subsidyActiveTab === 'spouse' ? 'lg:col-span-5' : 'lg:col-span-5'" class="bg-slate-950/60 rounded-xl border border-slate-800/80 p-3 flex flex-col justify-between">
+                    <div>
+                      <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                          <i class="fa-solid fa-heart text-pink-400"></i>
+                          申报人夫妻就职关系与生态分布
+                        </span>
+                        <span class="text-[10px] text-pink-300 font-mono">191户已婚家庭</span>
+                      </div>
+                      <div ref="subsidySpouseRelationChartEl" class="w-full" style="height: 240px;"></div>
+                    </div>
+                    <!-- 伴侣关系快捷联动卡片 -->
+                    <div class="mt-2 pt-2 border-t border-slate-800/80 grid grid-cols-2 gap-1.5 text-[11px] font-mono">
+                      <button
+                        @click="filterBySpouseRelation('same', '夫妻同单位')"
+                        :class="filterSpouseRelation === 'same' ? 'bg-emerald-600 text-white font-bold' : 'bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 border-emerald-500/20 border'"
+                        class="p-1.5 rounded transition text-left" title="筛选同单位夫妻名单">
+                        <div class="font-bold flex items-center justify-between">
+                          <span>夫妻同单位 (双职工)</span>
+                          <span>15对</span>
+                        </div>
+                        <div class="text-[10px] opacity-75">占比 5.2% 临安三院/瑞彼加等</div>
+                      </button>
+                      <button
+                        @click="filterBySpouseRelation('diff', '夫妻跨单位就职')"
+                        :class="filterSpouseRelation === 'diff' ? 'bg-sky-600 text-white font-bold' : 'bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 border-sky-500/20 border'"
+                        class="p-1.5 rounded transition text-left" title="筛选跨单位夫妻名单">
+                        <div class="font-bold flex items-center justify-between">
+                          <span>夫妻跨单位就职</span>
+                          <span>139人</span>
+                        </div>
+                        <div class="text-[10px] opacity-75">占比 48.3% 跨行业协同</div>
+                      </button>
+                      <button
+                        @click="filterBySpouseRelation('no_unit', '伴侣自由职业/待业')"
+                        :class="filterSpouseRelation === 'no_unit' ? 'bg-amber-600 text-white font-bold' : 'bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 border-amber-500/20 border'"
+                        class="p-1.5 rounded transition text-left" title="筛选伴侣自由/待业名单">
+                        <div class="font-bold flex items-center justify-between">
+                          <span>伴侣自由/待业/无</span>
+                          <span>37人</span>
+                        </div>
+                        <div class="text-[10px] opacity-75">占比 12.8% 全职或自主</div>
+                      </button>
+                      <button
+                        @click="filterBySpouseRelation('single', '未填伴侣/单身')"
+                        :class="filterSpouseRelation === 'single' ? 'bg-slate-700 text-white font-bold' : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border-slate-700 border'"
+                        class="p-1.5 rounded transition text-left" title="筛选未填配偶申报人名单">
+                        <div class="font-bold flex items-center justify-between">
+                          <span>未填伴侣 / 单身</span>
+                          <span>97人</span>
+                        </div>
+                        <div class="text-[10px] opacity-75">占比 33.7% 青年独立申报</div>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div :class="subsidyActiveTab === 'spouse' ? 'lg:col-span-7' : 'lg:col-span-7'" class="bg-slate-950/60 rounded-xl border border-slate-800/80 p-3 flex flex-col">
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                        <i class="fa-solid fa-hospital-user text-pink-400"></i>
+                        高层次人才伴侣热门就职单位排行 (Top 10)
+                      </span>
+                      <span class="text-[10px] text-slate-400">名院名校与名企</span>
+                    </div>
+                    <div ref="subsidySpouseUnitChartEl" class="w-full" style="height: 310px;"></div>
+                  </div>
+                </div>
+
+                <!-- 夫妻同单位（15对）重点企事业单位一览 -->
+                <div v-show="subsidyActiveTab === 'spouse'" class="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80">
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
+                      <i class="fa-solid fa-user-group"></i>
+                      夫妻同单位双职工典型企事业单位 (共 15 对夫妻)
+                    </span>
+                    <button
+                      @click="filterBySpouseRelation('same', '夫妻同单位')"
+                      class="text-[11px] text-emerald-400 hover:text-emerald-300 hover:underline">
+                      一键筛选这 15 对夫妻名单 →
+                    </button>
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
+                    <div class="p-2 bg-slate-900/80 rounded-lg border border-slate-800">
+                      <div class="text-slate-400 text-[11px]">临安区第三人民医院</div>
+                      <div class="font-bold text-white mt-0.5">曹阳 & 王闯</div>
+                      <div class="text-[10px] text-purple-400 font-mono mt-0.5">D-市级领军人才</div>
+                    </div>
+                    <div class="p-2 bg-slate-900/80 rounded-lg border border-slate-800">
+                      <div class="text-slate-400 text-[11px]">瑞彼加医疗科技</div>
+                      <div class="font-bold text-white mt-0.5">张杨 & 明如昕</div>
+                      <div class="text-[10px] text-orange-400 font-mono mt-0.5">C-省级领军人才</div>
+                    </div>
+                    <div class="p-2 bg-slate-900/80 rounded-lg border border-slate-800">
+                      <div class="text-slate-400 text-[11px]">碧橙数字技术</div>
+                      <div class="font-bold text-white mt-0.5">卢昌龙 & 欧阳贝妮</div>
+                      <div class="text-[10px] text-purple-400 font-mono mt-0.5">D-市级领军人才</div>
+                    </div>
+                    <div class="p-2 bg-slate-900/80 rounded-lg border border-slate-800">
+                      <div class="text-slate-400 text-[11px]">新化化工股份</div>
+                      <div class="font-bold text-white mt-0.5">柳磊 & 娄春情</div>
+                      <div class="text-[10px] text-purple-400 font-mono mt-0.5">D-市级领军人才</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- 加载中遮罩 -->
         <div v-if="loading" class="absolute inset-0 bg-slate-950/60 backdrop-blur-[2px] flex items-center justify-center z-10">
           <div class="flex flex-col items-center gap-2">
@@ -1891,6 +2356,33 @@
                     <span class="truncate max-w-xs md:max-w-sm inline-block align-middle">[[ formatCellText(row[col.key], col.key, row) ]]</span>
                     <i class="fa-regular fa-eye text-[11px] text-indigo-400 opacity-60 group-hover/title:opacity-100 group-hover/title:scale-110 transition-all flex-shrink-0"></i>
                   </button>
+
+                  <!-- 杭州住房补贴专属：申请人姓名匹配杭州高层次企业人才公示直接弹窗打开 -->
+                  <div v-else-if="col.key === 'applicant_name'" class="inline-flex items-center gap-2 whitespace-nowrap">
+                    <template v-if="row.matched_talent">
+                      <button
+                        @click.stop="openMatchedTalentModal(row.matched_talent)"
+                        type="button"
+                        class="text-left font-bold text-sky-400 hover:text-sky-200 hover:underline transition-all inline-flex items-center gap-1.5 cursor-pointer group/talent"
+                        :title="'点击直接弹窗查看【' + row.matched_talent.person_name + ' · ' + (row.matched_talent.apply_type || '') + '】杭州企业人才公示完整档案'">
+                        <span class="font-bold underline decoration-sky-400/50 underline-offset-2">[[ row.applicant_name ]]</span>
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-500/15 text-sky-300 border border-sky-500/30 group-hover/talent:bg-sky-500/25 flex items-center gap-1">
+                          <i class="fa-solid fa-award text-amber-400 text-[10px]"></i>
+                          人才公示
+                        </span>
+                        <i class="fa-regular fa-eye text-[11px] text-sky-400 opacity-70 group-hover/talent:opacity-100"></i>
+                      </button>
+                    </template>
+                    <template v-else>
+                      <button
+                        @click.stop="viewDetail(row)"
+                        type="button"
+                        class="text-left font-semibold text-slate-200 hover:text-white hover:underline transition-all inline-flex items-center gap-1 cursor-pointer"
+                        :title="'点击查看【' + row.applicant_name + '】申报信息'">
+                        <span>[[ row.applicant_name ]]</span>
+                      </button>
+                    </template>
+                  </div>
 
                   <!-- 自定义 Badge 渲染 -->
                   <span v-else-if="col.type === 'badge'" class="whitespace-nowrap inline-flex items-center" :class="getBadgeClass(row[col.key], col)">
@@ -2338,6 +2830,36 @@
 
           <!-- 通用非岗位非人才记录布局 (原有渲染逻辑) -->
           <template v-else>
+            <!-- 杭州住房补贴专属：已匹配杭州企业高层次人才公示卡片 -->
+            <div v-if="detailRow.matched_talent" class="p-4 bg-gradient-to-r from-sky-950/50 via-slate-900/60 to-indigo-950/50 rounded-xl border border-sky-500/40 shadow-sm space-y-2.5 mb-3">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-sky-300 flex items-center gap-1.5">
+                  <i class="fa-solid fa-award text-amber-400"></i>
+                  已成功匹配杭州企业高层次人才认定公示
+                </span>
+                <span class="text-[11px] text-sky-400/80 font-mono">
+                  公示ID: [[ detailRow.matched_talent.notice_id ]]
+                </span>
+              </div>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs text-slate-300 bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+                <div><span class="text-slate-500 text-[11px]">申报人：</span><span class="font-bold text-white">[[ detailRow.matched_talent.person_name ]]</span></div>
+                <div><span class="text-slate-500 text-[11px]">性别/出生：</span><span>[[ detailRow.matched_talent.gender || '-' ]] / [[ detailRow.matched_talent.birth_date || '-' ]]</span></div>
+                <div><span class="text-slate-500 text-[11px]">认定发布日期：</span><span class="font-mono text-slate-300">[[ detailRow.matched_talent.publish_date || '-' ]]</span></div>
+                <div class="col-span-2 sm:col-span-3"><span class="text-slate-500 text-[11px]">工作单位：</span><span class="text-slate-200">[[ detailRow.matched_talent.work_unit ]]</span></div>
+                <div class="col-span-2 sm:col-span-3"><span class="text-slate-500 text-[11px]">认定类别与依据：</span><span class="text-amber-300 font-medium">[[ detailRow.matched_talent.apply_type || '-' ]]</span></div>
+                <div class="col-span-2 sm:col-span-3"><span class="text-slate-500 text-[11px]">受理部门：</span><span class="text-slate-400">[[ detailRow.matched_talent.accept_dept || '-' ]]</span></div>
+              </div>
+              <div class="pt-1 flex items-center gap-2">
+                <button
+                  @click="openMatchedTalentModal(detailRow.matched_talent)"
+                  type="button"
+                  class="px-3 py-1.5 bg-sky-600/30 hover:bg-sky-600/50 text-sky-200 border border-sky-500/40 rounded-lg text-xs font-medium inline-flex items-center gap-1.5 transition">
+                  <i class="fa-solid fa-id-card text-[11px]"></i>
+                  在此弹窗查看完整人才档案
+                </button>
+              </div>
+            </div>
+
             <!-- 属性键值列表 -->
             <div class="grid grid-cols-2 gap-3 text-xs bg-slate-950/60 p-4 rounded-xl border border-slate-800/80">
               <template v-for="(val, key) in detailRow" :key="key">
@@ -2392,6 +2914,16 @@
                 <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
                 查看官方源站公示
               </a>
+            </template>
+            <!-- 住房补贴匹配人才专属操作 -->
+            <template v-else-if="detailRow.matched_talent">
+              <button
+                @click="openMatchedTalentModal(detailRow.matched_talent)"
+                type="button"
+                class="px-3 py-1.5 bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 rounded-lg text-xs font-medium inline-flex items-center gap-1.5 transition">
+                <i class="fa-regular fa-eye text-[11px]"></i>
+                查看高层次人才认定档案
+              </button>
             </template>
             <!-- 前沿技术专属操作 -->
             <template v-else-if="detailRow.author_username === 'trq212' || detailRow.tweet_id">
@@ -3254,6 +3786,16 @@
         const apiKeyModalVisible = ref(false);
         const currentApiKey = ref(localStorage.getItem('agent_control_api_key') || '');
         const apiKeyInput = ref(currentApiKey.value);
+
+        const getAuthHeaders = () => {
+          const headers = {};
+          const token = currentApiKey.value || localStorage.getItem('agent_control_api_key') || '';
+          if (token) {
+            headers['Authorization'] = 'Bearer ' + token;
+            headers['X-API-Key'] = token;
+          }
+          return headers;
+        };
 
         const openApiKeyModal = () => {
           apiKeyInput.value = currentApiKey.value;
@@ -4208,6 +4750,30 @@
           top_youth_companies: []
         });
 
+        // 杭州住房补贴多维统计分析状态 (公司/人才类型/伴侣)
+        const subsidyStats = ref({
+          summary: {},
+          talent_type_distribution: [],
+          top_companies: [],
+          top_spouse_units: [],
+          spouse_relations: []
+        });
+        const subsidyStatsLoading = ref(false);
+        const subsidyChartCollapsed = ref(false);
+        const subsidyActiveTab = ref('all'); // 'all' | 'company' | 'spouse'
+        const subsidyViewMode = ref('chart'); // 'chart' | 'table'
+        const subsidyTopN = ref(15);
+        const filterSpouseRelation = ref('');
+        const filterMatchedTalent = ref(false);
+        const subsidyCompanyChartEl = ref(null);
+        const subsidyTalentTypeChartEl = ref(null);
+        const subsidySpouseRelationChartEl = ref(null);
+        const subsidySpouseUnitChartEl = ref(null);
+        let subsidyCompanyChartInstance = null;
+        let subsidyTalentTypeChartInstance = null;
+        let subsidySpouseRelationChartInstance = null;
+        let subsidySpouseUnitChartInstance = null;
+
         // 12 大业务模块配置与数据字段映射 (按照 1.芯片半导体, 2.人才申报公示, 3.规约管理, 其余按名称排序)
         const menus = [
           // 1. 芯片半导体 (截图 1)
@@ -4316,6 +4882,21 @@
                   { key: 'accept_dept', label: '受理部门', truncate: true },
                   { key: 'apply_type', label: '申报类别', truncate: true },
                   { key: 'publish_date', label: '发布日期', cellClass: 'font-mono text-slate-400' }
+                ]
+              },
+              {
+                name: '杭州住房补贴',
+                endpoint: '/api/v1/extensions/housing-subsidy-records',
+                searchPlaceholder: '搜索申请人姓名、申请人单位、人才类型、配偶姓名、配偶单位...',
+                columns: [
+                  { key: 'seq', label: '序号', cellClass: 'font-mono text-center text-slate-300 w-16' },
+                  { key: 'biz_type', label: '业务类别', cellClass: 'font-medium text-indigo-400 whitespace-nowrap' },
+                  { key: 'applicant_name', label: '申请人姓名', cellClass: 'font-semibold text-white whitespace-nowrap' },
+                  { key: 'applicant_unit', label: '申请人单位', truncate: true },
+                  { key: 'applicant_talent_type', label: '申请人人才类型', cellClass: 'font-medium text-amber-400 whitespace-nowrap' },
+                  { key: 'spouse_name', label: '配偶姓名', cellClass: 'text-slate-300 whitespace-nowrap' },
+                  { key: 'spouse_unit', label: '配偶单位', truncate: true },
+                  { key: 'publicity_period', label: '公示起止时间', cellClass: 'font-mono text-slate-400 whitespace-nowrap' }
                 ]
               },
               {
@@ -4797,7 +5378,7 @@
             const resp = await fetch('/api/v1/dashboard/stats');
             const data = await resp.json();
             stats.value = {
-              talent_total: (data.talent?.total_notices || 0) + (data.hf_talent?.total_records || 0),
+              talent_total: (data.talent?.total_notices || 0) + (data.hf_talent?.total_records || 0) + (data.talent?.housing_subsidies || 0),
               github_total: (data.github?.contributions || 0) + (data.github?.prs_lifecycle || 0),
               jobs_total: (data.jobs?.positions || 0) + (data.jobs?.requirements || 0),
               agent_arch_total: (data.agent_arch?.positions || 0) + (data.agent_arch?.requirements || 0),
@@ -4829,13 +5410,16 @@
             if (searchKeyword.value.trim()) {
               url.searchParams.set('keyword', searchKeyword.value.trim());
             }
-            // 针对人才公示专属单独筛选 (日期、分类、排序、出生年份)
-            if (currentSubTab.value.endpoint === '/api/v1/extensions/talent-notices' || currentSubTab.value.endpoint === '/api/v1/extensions/hf-talent-records') {
+            // 针对人才公示与住房补贴专属单独筛选 (日期、分类、排序、出生年份)
+            if (currentSubTab.value.endpoint === '/api/v1/extensions/talent-notices' || currentSubTab.value.endpoint === '/api/v1/extensions/hf-talent-records' || currentSubTab.value.endpoint === '/api/v1/extensions/housing-subsidy-records') {
               if (filterDate.value) {
                 url.searchParams.set('publish_date', filterDate.value);
               }
               if (filterCategory.value.trim()) {
-                url.searchParams.set(currentSubTab.value.endpoint === '/api/v1/extensions/talent-notices' ? 'category' : 'level_code_name', filterCategory.value.trim());
+                const catParam = currentSubTab.value.endpoint === '/api/v1/extensions/talent-notices' 
+                  ? 'category' 
+                  : (currentSubTab.value.endpoint === '/api/v1/extensions/housing-subsidy-records' ? 'talent_type' : 'level_code_name');
+                url.searchParams.set(catParam, filterCategory.value.trim());
               }
               if (currentSubTab.value.endpoint === '/api/v1/extensions/talent-notices') {
                 if (talentSortBy.value) {
@@ -4846,6 +5430,14 @@
                 }
                 if (filterBirthYear.value) {
                   url.searchParams.set('birth_year', filterBirthYear.value.trim());
+                }
+              }
+              if (currentSubTab.value.endpoint === '/api/v1/extensions/housing-subsidy-records') {
+                if (filterSpouseRelation.value) {
+                  url.searchParams.set('spouse_relation', filterSpouseRelation.value);
+                }
+                if (filterMatchedTalent.value) {
+                  url.searchParams.set('has_matched_talent', 'true');
                 }
               }
             }
@@ -4891,6 +5483,8 @@
               } else if (endpoint === '/api/v1/extensions/hf-talent-records') {
                 activeAnalyticsTab.value = 'date';
                 fetchDateStats();
+              } else if (endpoint === '/api/v1/extensions/housing-subsidy-records') {
+                fetchSubsidyStats();
               }
             });
           } else if (menuId === 'jobs') {
@@ -4938,6 +5532,13 @@
           }
           document.title = `${currentMenu.value.label} - Agent Control 控制台`;
           refreshMenuAnalytics(currentMenuId.value);
+
+          const targetNoticeId = searchParams.get('notice_id');
+          if (targetNoticeId) {
+            nextTick(() => {
+              openNoticeDetailById(targetNoticeId);
+            });
+          }
         };
 
         // 切换左侧大菜单 (独立路由更新)
@@ -4968,6 +5569,8 @@
           filterDate.value = '';
           filterCategory.value = '';
           filterBirthYear.value = '';
+          filterSpouseRelation.value = '';
+          filterMatchedTalent.value = false;
           selectedCompanyFilter.value = '';
 
           if (pushHistory) {
@@ -4983,6 +5586,8 @@
           } else if (tab.endpoint === '/api/v1/extensions/hf-talent-records') {
             activeAnalyticsTab.value = 'date';
             fetchDateStats();
+          } else if (tab.endpoint === '/api/v1/extensions/housing-subsidy-records') {
+            fetchSubsidyStats();
           }
         };
 
@@ -5158,7 +5763,8 @@
             const url = new URL('/api/v1/extensions/talent-notices/company-stats', window.location.origin);
             url.searchParams.set('limit', chartTopN.value);
             url.searchParams.set('sort_by', chartSortBy.value);
-            const resp = await fetch(url.toString());
+            const headers = getAuthHeaders();
+            const resp = await fetch(url.toString(), { headers });
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
             companyStats.value = data;
@@ -5435,7 +6041,8 @@
             if (dateChartDays.value) {
               url.searchParams.set('days', dateChartDays.value);
             }
-            const resp = await fetch(url.toString());
+            const headers = getAuthHeaders();
+            const resp = await fetch(url.toString(), { headers });
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
             dateStats.value = data;
@@ -5689,7 +6296,8 @@
           birthYearStatsLoading.value = true;
           try {
             const url = new URL('/api/v1/extensions/talent-notices/birth-year-stats', window.location.origin);
-            const resp = await fetch(url.toString());
+            const headers = getAuthHeaders();
+            const resp = await fetch(url.toString(), { headers });
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
             birthYearStats.value = data;
@@ -6430,6 +7038,605 @@
           loadData();
         };
 
+        // ==========================================
+        // 杭州住房补贴统计指标与多维图表渲染 (公司/人才类型/伴侣)
+        // ==========================================
+        const resizeAllSubsidyCharts = () => {
+          if (subsidyCompanyChartInstance && !(subsidyCompanyChartInstance.isDisposed && subsidyCompanyChartInstance.isDisposed())) subsidyCompanyChartInstance.resize();
+          if (subsidyTalentTypeChartInstance && !(subsidyTalentTypeChartInstance.isDisposed && subsidyTalentTypeChartInstance.isDisposed())) subsidyTalentTypeChartInstance.resize();
+          if (subsidySpouseRelationChartInstance && !(subsidySpouseRelationChartInstance.isDisposed && subsidySpouseRelationChartInstance.isDisposed())) subsidySpouseRelationChartInstance.resize();
+          if (subsidySpouseUnitChartInstance && !(subsidySpouseUnitChartInstance.isDisposed && subsidySpouseUnitChartInstance.isDisposed())) subsidySpouseUnitChartInstance.resize();
+        };
+
+        const fetchSubsidyStats = async () => {
+          subsidyStatsLoading.value = true;
+          try {
+            const url = new URL('/api/v1/extensions/housing-subsidy-records/stats', window.location.origin);
+            url.searchParams.set('limit', subsidyTopN.value);
+            const headers = getAuthHeaders();
+            const resp = await fetch(url.toString(), { headers });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            subsidyStats.value = data;
+            nextTick(() => {
+              renderAllSubsidyCharts();
+              setTimeout(() => {
+                resizeAllSubsidyCharts();
+              }, 60);
+            });
+          } catch (err) {
+            console.error('Failed to fetch subsidy stats:', err);
+          } finally {
+            subsidyStatsLoading.value = false;
+          }
+        };
+
+        const renderAllSubsidyCharts = () => {
+          if (subsidyChartCollapsed.value) return;
+          nextTick(() => {
+            if (subsidyActiveTab.value === 'all' || subsidyActiveTab.value === 'company') {
+              if (subsidyViewMode.value === 'chart') {
+                renderSubsidyCompanyChart();
+              }
+              renderSubsidyTalentTypeChart();
+            }
+            if (subsidyActiveTab.value === 'all' || subsidyActiveTab.value === 'spouse') {
+              renderSubsidySpouseRelationChart();
+              renderSubsidySpouseUnitChart();
+            }
+            setTimeout(() => {
+              resizeAllSubsidyCharts();
+            }, 60);
+          });
+        };
+
+        const switchSubsidyActiveTab = (tab) => {
+          subsidyActiveTab.value = tab;
+          nextTick(() => {
+            renderAllSubsidyCharts();
+            setTimeout(() => {
+              resizeAllSubsidyCharts();
+            }, 80);
+          });
+        };
+
+        const changeSubsidyTopN = (n) => {
+          subsidyTopN.value = n;
+          fetchSubsidyStats();
+        };
+
+        const renderSubsidyCompanyChart = () => {
+          if (!subsidyCompanyChartEl.value || typeof echarts === 'undefined') return;
+          subsidyCompanyChartInstance = getOrInitChart(subsidyCompanyChartInstance, subsidyCompanyChartEl.value);
+          if (!subsidyCompanyChartInstance) return;
+
+          subsidyCompanyChartInstance.off('click');
+          subsidyCompanyChartInstance.on('click', (params) => {
+            if (params && params.name) {
+              filterBySubsidyCompany(params.name);
+            }
+          });
+
+          const comps = subsidyStats.value?.top_companies || [];
+          const categories = comps.map(c => c.company);
+          const aData = comps.map(c => c.a_count || 0);
+          const bData = comps.map(c => c.b_count || 0);
+          const cData = comps.map(c => c.c_count || 0);
+          const dData = comps.map(c => c.d_count || 0);
+
+          const option = {
+            backgroundColor: 'transparent',
+            tooltip: {
+              trigger: 'axis',
+              axisPointer: { type: 'shadow' },
+              backgroundColor: '#0f172a',
+              borderColor: '#334155',
+              borderWidth: 1,
+              padding: [10, 14],
+              textStyle: { color: '#f8fafc', fontSize: 12 },
+              formatter: function (params) {
+                const compName = params[0]?.name || '';
+                const comp = comps.find(c => c.company === compName) || {};
+                let rows = '';
+                params.forEach(p => {
+                  if (p.value > 0) {
+                    rows += `<div style="display:flex;justify-content:space-between;align-items:center;gap:16px;margin:3px 0;">
+                      <span style="display:flex;align-items:center;gap:6px;">${p.marker} ${p.seriesName}</span>
+                      <span style="font-family:monospace;font-weight:bold;">${p.value} 人</span>
+                    </div>`;
+                  }
+                });
+                return `
+                  <div style="font-weight:bold;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #334155;color:#fff;font-size:12px;">
+                    ${compName}
+                  </div>
+                  ${rows}
+                  <div style="margin-top:6px;padding-top:4px;border-top:1px solid #334155;display:flex;justify-content:space-between;color:#818cf8;font-weight:bold;">
+                    <span>领补申报总人数</span>
+                    <span style="font-family:monospace;">${comp.total || 0} 人</span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;color:#ec4899;font-size:11px;margin-top:2px;">
+                    <span>其中已婚申报人</span>
+                    <span style="font-family:monospace;">${comp.married_count || 0} 人</span>
+                  </div>
+                  <div style="margin-top:6px;font-size:10px;color:#94a3b8;text-align:right;">
+                    💡 点击柱体直接联动筛选下方申报名单
+                  </div>
+                `;
+              }
+            },
+            grid: {
+              left: '2%',
+              right: '4%',
+              top: '4%',
+              bottom: '3%',
+              containLabel: true
+            },
+            xAxis: {
+              type: 'value',
+              splitLine: { lineStyle: { color: '#1e293b' } },
+              axisLabel: { color: '#94a3b8', fontSize: 10 }
+            },
+            yAxis: {
+              type: 'category',
+              inverse: true,
+              data: categories,
+              axisLine: { lineStyle: { color: '#334155' } },
+              axisLabel: {
+                color: '#cbd5e1',
+                fontSize: 11,
+                formatter: function (val) {
+                  return val.length > 15 ? val.substring(0, 14) + '…' : val;
+                }
+              }
+            },
+            series: [
+              {
+                name: 'A类(顶尖)',
+                type: 'bar',
+                stack: 'total',
+                color: '#ef4444',
+                barWidth: 14,
+                data: aData
+              },
+              {
+                name: 'B类(国家级)',
+                type: 'bar',
+                stack: 'total',
+                color: '#eab308',
+                barWidth: 14,
+                data: bData
+              },
+              {
+                name: 'C类(省级)',
+                type: 'bar',
+                stack: 'total',
+                color: '#f97316',
+                barWidth: 14,
+                data: cData
+              },
+              {
+                name: 'D类(市级)',
+                type: 'bar',
+                stack: 'total',
+                color: '#a855f7',
+                barWidth: 14,
+                itemStyle: { borderRadius: [0, 3, 3, 0] },
+                data: dData
+              }
+            ]
+          };
+
+          subsidyCompanyChartInstance.setOption(option, true);
+          subsidyCompanyChartInstance.resize();
+          setTimeout(() => {
+            if (subsidyCompanyChartInstance && !(subsidyCompanyChartInstance.isDisposed && subsidyCompanyChartInstance.isDisposed())) subsidyCompanyChartInstance.resize();
+          }, 50);
+        };
+
+        const renderSubsidyTalentTypeChart = () => {
+          if (!subsidyTalentTypeChartEl.value || typeof echarts === 'undefined') return;
+          subsidyTalentTypeChartInstance = getOrInitChart(subsidyTalentTypeChartInstance, subsidyTalentTypeChartEl.value);
+          if (!subsidyTalentTypeChartInstance) return;
+
+          subsidyTalentTypeChartInstance.off('click');
+          subsidyTalentTypeChartInstance.on('click', (params) => {
+            if (params && params.name) {
+              filterBySubsidyTalentType(params.name);
+            }
+          });
+
+          const rawList = subsidyStats.value?.talent_type_distribution || [];
+          const colorMap = {
+            'A-顶尖人才': '#ef4444',
+            'B-国家级领军': '#eab308',
+            'C-省级领军': '#f97316',
+            'D-市级领军': '#a855f7'
+          };
+          const data = rawList.map(item => ({
+            name: item.type,
+            value: item.count,
+            itemStyle: { color: colorMap[item.type] || '#38bdf8' }
+          }));
+
+          const total = subsidyStats.value?.summary?.total_records || 288;
+
+          const option = {
+            backgroundColor: 'transparent',
+            tooltip: {
+              trigger: 'item',
+              backgroundColor: '#0f172a',
+              borderColor: '#334155',
+              borderWidth: 1,
+              padding: [8, 12],
+              textStyle: { color: '#f8fafc', fontSize: 12 },
+              formatter: function (p) {
+                return `
+                  <div style="font-weight:bold;margin-bottom:4px;color:#fff;">${p.marker} ${p.name}</div>
+                  <div style="font-size:11px;color:#cbd5e1;">人数: <span style="font-family:monospace;font-weight:bold;color:#fff;">${p.value} 人</span> (${p.percent}%)</div>
+                  <div style="margin-top:4px;font-size:10px;color:#94a3b8;">💡 点击筛选该类别名单</div>
+                `;
+              }
+            },
+            legend: {
+              orient: 'vertical',
+              right: '2%',
+              top: 'middle',
+              itemWidth: 10,
+              itemHeight: 10,
+              textStyle: { color: '#cbd5e1', fontSize: 11 },
+              formatter: function (name) {
+                const item = rawList.find(i => i.type === name);
+                const count = item ? item.count : 0;
+                const pct = total > 0 ? ((count / total) * 100).toFixed(1) : '0';
+                return `${name}  ${count}人 (${pct}%)`;
+              }
+            },
+            series: [
+              {
+                name: '人才类型分布',
+                type: 'pie',
+                radius: ['45%', '70%'],
+                center: ['35%', '50%'],
+                avoidLabelOverlap: false,
+                itemStyle: {
+                  borderRadius: 6,
+                  borderColor: '#0f172a',
+                  borderWidth: 2
+                },
+                label: {
+                  show: true,
+                  position: 'center',
+                  formatter: () => `{total|${total}}\n{sub|领补总数}`,
+                  rich: {
+                    total: {
+                      fontSize: 18,
+                      fontWeight: 'bold',
+                      color: '#ffffff',
+                      fontFamily: 'monospace',
+                      lineHeight: 24
+                    },
+                    sub: {
+                      fontSize: 10,
+                      color: '#94a3b8'
+                    }
+                  }
+                },
+                data: data
+              }
+            ]
+          };
+
+          subsidyTalentTypeChartInstance.setOption(option, true);
+          subsidyTalentTypeChartInstance.resize();
+          setTimeout(() => {
+            if (subsidyTalentTypeChartInstance && !(subsidyTalentTypeChartInstance.isDisposed && subsidyTalentTypeChartInstance.isDisposed())) subsidyTalentTypeChartInstance.resize();
+          }, 50);
+        };
+
+        const renderSubsidySpouseRelationChart = () => {
+          if (!subsidySpouseRelationChartEl.value || typeof echarts === 'undefined') return;
+          subsidySpouseRelationChartInstance = getOrInitChart(subsidySpouseRelationChartInstance, subsidySpouseRelationChartEl.value);
+          if (!subsidySpouseRelationChartInstance) return;
+
+          subsidySpouseRelationChartInstance.off('click');
+          subsidySpouseRelationChartInstance.on('click', (params) => {
+            if (params && params.data && params.data.relationKey) {
+              filterBySpouseRelation(params.data.relationKey, params.name);
+            }
+          });
+
+          const relList = subsidyStats.value?.spouse_relations || [];
+          const keyMap = {
+            '夫妻跨单位就职': { key: 'diff', color: '#38bdf8' },
+            '夫妻同单位 (科研/名企夫妻)': { key: 'same', color: '#10b981' },
+            '伴侣自由职业/无单位/待业': { key: 'no_unit', color: '#f59e0b' },
+            '未婚 / 未填伴侣': { key: 'single', color: '#64748b' }
+          };
+
+          const data = relList.map(item => {
+            const conf = keyMap[item.label] || { key: 'has_spouse', color: '#818cf8' };
+            return {
+              name: item.label,
+              value: item.count,
+              relationKey: conf.key,
+              itemStyle: { color: conf.color }
+            };
+          });
+
+          const total = subsidyStats.value?.summary?.total_records || 288;
+          const marriedRate = subsidyStats.value?.summary?.married_rate || 66.3;
+
+          const option = {
+            backgroundColor: 'transparent',
+            tooltip: {
+              trigger: 'item',
+              backgroundColor: '#0f172a',
+              borderColor: '#334155',
+              borderWidth: 1,
+              padding: [8, 12],
+              textStyle: { color: '#f8fafc', fontSize: 12 },
+              formatter: function (p) {
+                return `
+                  <div style="font-weight:bold;margin-bottom:4px;color:#fff;">${p.marker} ${p.name}</div>
+                  <div style="font-size:11px;color:#cbd5e1;">人数: <span style="font-family:monospace;font-weight:bold;color:#fff;">${p.value} 人</span> (${p.percent}%)</div>
+                  <div style="margin-top:4px;font-size:10px;color:#94a3b8;">💡 点击筛选该配偶关系群体</div>
+                `;
+              }
+            },
+            legend: {
+              orient: 'vertical',
+              right: '2%',
+              top: 'middle',
+              itemWidth: 10,
+              itemHeight: 10,
+              textStyle: { color: '#cbd5e1', fontSize: 11 },
+              formatter: function (name) {
+                const item = relList.find(i => i.label === name);
+                const count = item ? item.count : 0;
+                const pct = total > 0 ? ((count / total) * 100).toFixed(1) : '0';
+                return `${name.split(' ')[0]}  ${count}人 (${pct}%)`;
+              }
+            },
+            series: [
+              {
+                name: '夫妻就职关系',
+                type: 'pie',
+                radius: ['45%', '70%'],
+                center: ['35%', '50%'],
+                avoidLabelOverlap: false,
+                itemStyle: {
+                  borderRadius: 6,
+                  borderColor: '#0f172a',
+                  borderWidth: 2
+                },
+                label: {
+                  show: true,
+                  position: 'center',
+                  formatter: () => `{rate|${marriedRate}%}\n{sub|有伴侣率}`,
+                  rich: {
+                    rate: {
+                      fontSize: 18,
+                      fontWeight: 'bold',
+                      color: '#ec4899',
+                      fontFamily: 'monospace',
+                      lineHeight: 24
+                    },
+                    sub: {
+                      fontSize: 10,
+                      color: '#94a3b8'
+                    }
+                  }
+                },
+                data: data
+              }
+            ]
+          };
+
+          subsidySpouseRelationChartInstance.setOption(option, true);
+          subsidySpouseRelationChartInstance.resize();
+          setTimeout(() => {
+            if (subsidySpouseRelationChartInstance && !(subsidySpouseRelationChartInstance.isDisposed && subsidySpouseRelationChartInstance.isDisposed())) subsidySpouseRelationChartInstance.resize();
+          }, 50);
+        };
+
+        const renderSubsidySpouseUnitChart = () => {
+          if (!subsidySpouseUnitChartEl.value || typeof echarts === 'undefined') return;
+          subsidySpouseUnitChartInstance = getOrInitChart(subsidySpouseUnitChartInstance, subsidySpouseUnitChartEl.value);
+          if (!subsidySpouseUnitChartInstance) return;
+
+          subsidySpouseUnitChartInstance.off('click');
+          subsidySpouseUnitChartInstance.on('click', (params) => {
+            if (params && params.name) {
+              filterBySubsidyCompany(params.name);
+            }
+          });
+
+          // 排除 "无" 选项，展示真实的伴侣就业单位
+          const rawSpouseUnits = (subsidyStats.value?.top_spouse_units || []).filter(u => u.unit && u.unit !== '无');
+          const units = rawSpouseUnits.slice(0, 10);
+          const categories = units.map(u => u.unit);
+          const counts = units.map(u => u.count);
+
+          const option = {
+            backgroundColor: 'transparent',
+            tooltip: {
+              trigger: 'axis',
+              axisPointer: { type: 'shadow' },
+              backgroundColor: '#0f172a',
+              borderColor: '#334155',
+              borderWidth: 1,
+              padding: [8, 12],
+              textStyle: { color: '#f8fafc', fontSize: 12 },
+              formatter: function (params) {
+                const title = params[0]?.name || '';
+                const val = params[0]?.value || 0;
+                return `
+                  <div style="font-weight:bold;margin-bottom:4px;color:#fff;">${title}</div>
+                  <div style="color:#ec4899;font-size:11px;">伴侣任职: <span style="font-family:monospace;font-weight:bold;">${val} 人</span></div>
+                  <div style="margin-top:4px;font-size:10px;color:#94a3b8;">💡 点击筛选该配偶工作单位</div>
+                `;
+              }
+            },
+            grid: {
+              left: '2%',
+              right: '8%',
+              top: '4%',
+              bottom: '3%',
+              containLabel: true
+            },
+            xAxis: {
+              type: 'value',
+              splitLine: { lineStyle: { color: '#1e293b' } },
+              axisLabel: { color: '#94a3b8', fontSize: 10 }
+            },
+            yAxis: {
+              type: 'category',
+              inverse: true,
+              data: categories,
+              axisLine: { lineStyle: { color: '#334155' } },
+              axisLabel: {
+                color: '#cbd5e1',
+                fontSize: 11,
+                formatter: function (val) {
+                  return val.length > 15 ? val.substring(0, 14) + '…' : val;
+                }
+              }
+            },
+            series: [
+              {
+                name: '伴侣人数',
+                type: 'bar',
+                barWidth: 14,
+                data: counts,
+                itemStyle: {
+                  borderRadius: [0, 4, 4, 0],
+                  color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                    { offset: 0, color: '#ec4899' },
+                    { offset: 1, color: '#8b5cf6' }
+                  ])
+                },
+                label: {
+                  show: true,
+                  position: 'right',
+                  color: '#f472b6',
+                  fontFamily: 'monospace',
+                  fontSize: 11,
+                  formatter: '{c} 人'
+                }
+              }
+            ]
+          };
+
+          subsidySpouseUnitChartInstance.setOption(option, true);
+          subsidySpouseUnitChartInstance.resize();
+          setTimeout(() => {
+            if (subsidySpouseUnitChartInstance && !(subsidySpouseUnitChartInstance.isDisposed && subsidySpouseUnitChartInstance.isDisposed())) subsidySpouseUnitChartInstance.resize();
+          }, 50);
+        };
+
+        const filterBySubsidyCompany = (compName) => {
+          searchKeyword.value = compName;
+          pagination.value.page = 1;
+          loadData();
+          showToast('单位筛选联动', `已快速筛选【${compName}】申报记录`, 'info', 3000);
+        };
+
+        const filterBySubsidyTalentType = (typeName) => {
+          filterCategory.value = typeName;
+          pagination.value.page = 1;
+          loadData();
+          showToast('人才类型联动', `已快速筛选【${typeName}】申报记录`, 'info', 3000);
+        };
+
+        const filterBySpouseRelation = (relationKey, label) => {
+          filterSpouseRelation.value = relationKey;
+          pagination.value.page = 1;
+          loadData();
+          showToast('配偶关系联动', `已快速筛选【${label || relationKey}】记录`, 'info', 3000);
+        };
+
+        const clearSubsidyFilters = () => {
+          searchKeyword.value = '';
+          filterCategory.value = '';
+          filterSpouseRelation.value = '';
+          filterMatchedTalent.value = false;
+          pagination.value.page = 1;
+          loadData();
+          showToast('筛选已清空', '已恢复展示全部补贴公示数据', 'info', 2000);
+        };
+
+        const toggleFilterMatchedTalent = () => {
+          filterMatchedTalent.value = !filterMatchedTalent.value;
+          pagination.value.page = 1;
+          loadData();
+          if (filterMatchedTalent.value) {
+            showToast('高层次人才筛选', '已筛选与杭州企业高层次人才公示完全匹配的申报人 (6人)', 'info', 3000);
+          } else {
+            showToast('已取消筛选', '已恢复展示全部住房补贴申请人', 'info', 2000);
+          }
+        };
+
+        const openNoticeDetailById = async (noticeId) => {
+          if (!noticeId) return;
+          try {
+            const url = new URL(`/api/v1/extensions/talent-notices/${encodeURIComponent(noticeId)}`, window.location.origin);
+            const headers = getAuthHeaders();
+            const resp = await fetch(url.toString(), { headers });
+            if (resp.ok) {
+              const notice = await resp.json();
+              if (notice && notice.person_name) {
+                // 若当前不在第一项 杭州人才公示，先切换 Tab
+                const talentMenu = menus.find(m => m.id === 'talent');
+                if (talentMenu && currentSubTab.value?.endpoint !== '/api/v1/extensions/talent-notices') {
+                  currentSubTab.value = talentMenu.subTabs[0];
+                }
+                viewDetail(notice);
+                showToast('已匹配人才公示', `已打开【${notice.person_name} · ${notice.work_unit}】高层次人才认定档案`, 'success', 3500);
+              }
+            } else {
+              searchKeyword.value = noticeId;
+              loadData();
+            }
+          } catch (e) {
+            console.error('Failed to open notice detail by notice_id:', e);
+          }
+        };
+
+        const openMatchedTalentModal = async (matched) => {
+          if (!matched) return;
+          // 直接在当前页面弹窗打开人才认定公示完整详情抽屉，无需新建标签页
+          viewDetail(matched);
+          showToast('人才公示档案', `已直接打开【${matched.person_name} · ${matched.work_unit}】高层次人才公示详情`, 'info', 2500);
+
+          if (matched.notice_id) {
+            try {
+              const url = new URL(`/api/v1/extensions/talent-notices/${encodeURIComponent(matched.notice_id)}`, window.location.origin);
+              const headers = getAuthHeaders();
+              const resp = await fetch(url.toString(), { headers });
+              if (resp.ok) {
+                const fullNotice = await resp.json();
+                if (fullNotice && fullNotice.notice_id === matched.notice_id && detailVisible.value) {
+                  detailRow.value = { ...matched, ...fullNotice };
+                }
+              }
+            } catch (e) {
+              console.warn('Silent refresh talent notice detail:', e);
+            }
+          }
+        };
+
+        const getSpouseRelationLabel = (key) => {
+          const map = {
+            'same': '夫妻同单位 (15对)',
+            'diff': '夫妻跨单位就职 (139人)',
+            'no_unit': '伴侣自由职业/待业 (37人)',
+            'single': '未婚/未填伴侣 (97人)',
+            'has_spouse': '已婚有配偶 (191人)'
+          };
+          return map[key] || key;
+        };
+
         const handleJump = () => {
           let p = parseInt(jumpPageNum.value);
           if (isNaN(p)) return;
@@ -6542,6 +7749,13 @@
           keywords: '关键词标签',
 
           // 人才公示专属字段
+          seq: '序号',
+          biz_type: '业务类别',
+          applicant_name: '申请人姓名',
+          applicant_unit: '申请人单位',
+          applicant_talent_type: '申请人人才类型',
+          spouse_name: '配偶姓名',
+          spouse_unit: '配偶单位',
           work_unit: '工作单位',
           accept_dept: '受理部门',
           apply_type: '申报类别 / 认定依据',
@@ -6822,6 +8036,10 @@
             if (hzCityPieInstance && !(hzCityPieInstance.isDisposed && hzCityPieInstance.isDisposed())) hzCityPieInstance.resize();
             if (hzBirthYearChartInstance && !(hzBirthYearChartInstance.isDisposed && hzBirthYearChartInstance.isDisposed())) hzBirthYearChartInstance.resize();
             if (hzDecadePieInstance && !(hzDecadePieInstance.isDisposed && hzDecadePieInstance.isDisposed())) hzDecadePieInstance.resize();
+            if (subsidyCompanyChartInstance && !(subsidyCompanyChartInstance.isDisposed && subsidyCompanyChartInstance.isDisposed())) subsidyCompanyChartInstance.resize();
+            if (subsidyTalentTypeChartInstance && !(subsidyTalentTypeChartInstance.isDisposed && subsidyTalentTypeChartInstance.isDisposed())) subsidyTalentTypeChartInstance.resize();
+            if (subsidySpouseRelationChartInstance && !(subsidySpouseRelationChartInstance.isDisposed && subsidySpouseRelationChartInstance.isDisposed())) subsidySpouseRelationChartInstance.resize();
+            if (subsidySpouseUnitChartInstance && !(subsidySpouseUnitChartInstance.isDisposed && subsidySpouseUnitChartInstance.isDisposed())) subsidySpouseUnitChartInstance.resize();
           });
           window.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
@@ -6845,9 +8063,16 @@
           checkCrawlStatus();
           fetchJobCompanies();
           if (currentMenuId.value === 'talent') {
-            fetchCompanyStats();
-            fetchDateStats();
-            fetchBirthYearStats();
+            const endpoint = currentSubTab.value?.endpoint;
+            if (endpoint === '/api/v1/extensions/housing-subsidy-records') {
+              fetchSubsidyStats();
+            } else if (endpoint === '/api/v1/extensions/hf-talent-records') {
+              fetchDateStats();
+            } else {
+              fetchCompanyStats();
+              fetchDateStats();
+              fetchBirthYearStats();
+            }
           }
         });
 
@@ -7002,7 +8227,31 @@
           openDispatchModal,
           submitDispatchTask,
           mcpModalVisible,
-          openMcpModal
+          openMcpModal,
+          subsidyStats,
+          subsidyStatsLoading,
+          subsidyChartCollapsed,
+          subsidyActiveTab,
+          subsidyViewMode,
+          subsidyTopN,
+          filterSpouseRelation,
+          subsidyCompanyChartEl,
+          subsidyTalentTypeChartEl,
+          subsidySpouseRelationChartEl,
+          subsidySpouseUnitChartEl,
+          fetchSubsidyStats,
+          renderAllSubsidyCharts,
+          switchSubsidyActiveTab,
+          changeSubsidyTopN,
+          filterBySubsidyCompany,
+          filterBySubsidyTalentType,
+          filterBySpouseRelation,
+          clearSubsidyFilters,
+          getSpouseRelationLabel,
+          filterMatchedTalent,
+          toggleFilterMatchedTalent,
+          openNoticeDetailById,
+          openMatchedTalentModal
         };
       }
     }).mount('#app');

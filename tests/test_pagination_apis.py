@@ -104,6 +104,27 @@ def test_all_apis():
     assert d_combo["total"] == 72
     print(f"[OK] Talent Notice Combo (Date 2026-09-09 + Category E类) -> matched total={d_combo['total']}")
 
+    # Test talent stats endpoints (company-stats, date-stats, birth-year-stats)
+    print("--------------------------------------------------")
+    resp_stats = client.get("/api/v1/extensions/talent-notices/company-stats?limit=15", headers=auth_headers)
+    assert resp_stats.status_code == 200
+    d_stats = resp_stats.json()
+    assert "total_companies" in d_stats and d_stats["total_companies"] > 0
+    assert "companies" in d_stats and len(d_stats["companies"]) > 0
+    print(f"[OK] Talent Company Stats -> total_companies={d_stats['total_companies']}, top_companies={len(d_stats['companies'])}")
+
+    resp_date_stats = client.get("/api/v1/extensions/talent-notices/date-stats", headers=auth_headers)
+    assert resp_date_stats.status_code == 200
+    d_date_stats = resp_date_stats.json()
+    assert "timeline" in d_date_stats
+    print(f"[OK] Talent Date Stats -> timeline points={len(d_date_stats['timeline'])}")
+
+    resp_by_stats = client.get("/api/v1/extensions/talent-notices/birth-year-stats", headers=auth_headers)
+    assert resp_by_stats.status_code == 200
+    d_by_stats = resp_by_stats.json()
+    assert "decade_summary" in d_by_stats
+    print(f"[OK] Talent Birth Year Stats -> decades={len(d_by_stats['decade_summary'])}")
+
     print("==================================================")
     if all_passed:
         print("🎉 ALL 24 BUSINESS PAGINATION ENDPOINTS & DASHBOARD PASSED PERFECTLY!")

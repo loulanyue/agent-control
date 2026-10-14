@@ -7,11 +7,11 @@ from typing import Optional, List, Any, Dict
 from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, or_, cast, String, case, asc, func
+from sqlalchemy import desc, or_, cast, String, case, asc, func, Integer, and_, exists
 
 from db.session import get_db
 from app.models.extensions import (
-    HzTalentNotice, HzNoticeCrawlRun,
+    HzTalentNotice, HzHousingSubsidyRecord, HzNoticeCrawlRun,
     HfTalentRecord, HfTalentCrawlRun,
     GithubPrLifecycle, GithubContribution,
     PartTimeOpportunity, PartTimeScanRun,
@@ -40,9 +40,12 @@ def list_talent_notices(
     sort_by: Optional[str] = Query("publish_date", description="排序字段: publish_date / birth_date"),
     order: Optional[str] = Query("desc", description="排序顺序: desc / asc"),
     birth_year: Optional[str] = Query(None, description="出生年份或年代过滤，如 1997, 00后, 95后, 90后, 85后, 80后, 70后, 60后"),
+    notice_id: Optional[str] = Query(None, description="按公示唯一编号精确查询"),
     db: Session = Depends(get_db)
 ):
     query = db.query(HzTalentNotice)
+    if isinstance(notice_id, str) and notice_id.strip():
+        query = query.filter(HzTalentNotice.notice_id == notice_id.strip())
     if isinstance(notice_type, str) and notice_type.strip():
         query = query.filter(HzTalentNotice.notice_type == notice_type.strip())
     if isinstance(publish_date, str) and publish_date.strip():
@@ -97,8 +100,9 @@ def list_talent_notices(
         )
 
     # 排序处理: 支持按 publish_date 或 birth_date 倒序/正序
-    is_asc = (order or "").strip().lower() == "asc"
-    if (sort_by or "").strip().lower() == "birth_date":
+    is_asc = (order.strip().lower() == "asc") if isinstance(order, str) else False
+    sort_by_str = sort_by.strip().lower() if isinstance(sort_by, str) else "publish_date"
+    if sort_by_str == "birth_date":
         # 确保有具体YYYY年MM月格式的有效日期优先排在前面，无效或'多批次'排在最后
         valid_birth_case = case((HzTalentNotice.birth_date.op("REGEXP")("^[0-9]{4}年"), 0), else_=1).asc()
         if is_asc:
@@ -133,6 +137,323 @@ def list_talent_notices(
         }
 
     return paginate_query(query, page if isinstance(page, int) else 1, page_size if isinstance(page_size, int) else 20, serialize)
+
+@router.get("/housing-subsidy-records", response_model=PageResult[Any])
+def list_housing_subsidy_records(
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页大小"),
+    biz_type: Optional[str] = Query(None, description="业务类别: 购房补贴资格 等"),
+    talent_type: Optional[str] = Query(None, description="人才类型: C-省级领军人才 / D-市级领军人才 等"),
+    spouse_relation: Optional[str] = Query(None, description="配偶关系: same(同单位) / diff(跨单位) / no_unit(自由/待业) / single(未填伴侣) / has_spouse(有伴侣)"),
+    has_matched_talent: Optional[bool] = Query(None, description="是否仅筛选已关联杭州企业高层次人才公示的申请人"),
+    keyword: Optional[str] = Query(None, description="申请人/单位/配偶/配偶单位关键词"),
+    publish_date: Optional[str] = Query(None, description="发布日期 YYYY-MM-DD 或 YYYY-MM"),
+    order: Optional[str] = Query("desc", description="排序顺序: desc / asc"),
+    db: Session = Depends(get_db)
+):
+    import math
+
+    query = db.query(HzHousingSubsidyRecord)
+    if isinstance(biz_type, str) and biz_type.strip():
+        query = query.filter(HzHousingSubsidyRecord.biz_type.ilike(f"%{biz_type.strip()}%"))
+    if isinstance(talent_type, str) and talent_type.strip():
+        tt = talent_type.strip()
+        if tt.startswith("A") or "顶尖" in tt:
+            query = query.filter(or_(HzHousingSubsidyRecord.applicant_talent_type.ilike("%A%"), HzHousingSubsidyRecord.applicant_talent_type.ilike("%顶尖%")))
+        elif tt.startswith("B") or "国家级" in tt:
+            query = query.filter(or_(HzHousingSubsidyRecord.applicant_talent_type.ilike("%B%"), HzHousingSubsidyRecord.applicant_talent_type.ilike("%国家级%")))
+        elif tt.startswith("C") or "省级" in tt:
+            query = query.filter(or_(HzHousingSubsidyRecord.applicant_talent_type.ilike("%C%"), HzHousingSubsidyRecord.applicant_talent_type.ilike("%省级%")))
+        elif tt.startswith("D") or "市级" in tt:
+            query = query.filter(or_(HzHousingSubsidyRecord.applicant_talent_type.ilike("%D%"), HzHousingSubsidyRecord.applicant_talent_type.ilike("%市级%")))
+        else:
+            query = query.filter(HzHousingSubsidyRecord.applicant_talent_type.ilike(f"%{tt}%"))
+    if isinstance(spouse_relation, str) and spouse_relation.strip():
+        sr = spouse_relation.strip().lower()
+        if sr == "same":
+            query = query.filter(
+                HzHousingSubsidyRecord.spouse_name.isnot(None),
+                HzHousingSubsidyRecord.spouse_name != "",
+                HzHousingSubsidyRecord.spouse_name != "无",
+                HzHousingSubsidyRecord.spouse_unit == HzHousingSubsidyRecord.applicant_unit,
+                HzHousingSubsidyRecord.spouse_unit != "",
+                HzHousingSubsidyRecord.spouse_unit != "无"
+            )
+        elif sr == "diff":
+            query = query.filter(
+                HzHousingSubsidyRecord.spouse_name.isnot(None),
+                HzHousingSubsidyRecord.spouse_name != "",
+                HzHousingSubsidyRecord.spouse_name != "无",
+                HzHousingSubsidyRecord.spouse_unit.isnot(None),
+                HzHousingSubsidyRecord.spouse_unit != "",
+                ~HzHousingSubsidyRecord.spouse_unit.in_(["无", "待业", "待业在家", "自由职业", "无工作", "退休"]),
+                HzHousingSubsidyRecord.spouse_unit != HzHousingSubsidyRecord.applicant_unit
+            )
+        elif sr in ("no_unit", "free"):
+            query = query.filter(
+                HzHousingSubsidyRecord.spouse_name.isnot(None),
+                HzHousingSubsidyRecord.spouse_name != "",
+                HzHousingSubsidyRecord.spouse_name != "无",
+                or_(
+                    HzHousingSubsidyRecord.spouse_unit.is_(None),
+                    HzHousingSubsidyRecord.spouse_unit.in_(["", "无", "待业", "待业在家", "自由职业", "无工作", "退休"])
+                )
+            )
+        elif sr == "single":
+            query = query.filter(
+                or_(
+                    HzHousingSubsidyRecord.spouse_name.is_(None),
+                    HzHousingSubsidyRecord.spouse_name == "",
+                    HzHousingSubsidyRecord.spouse_name == "无"
+                )
+            )
+        elif sr == "has_spouse":
+            query = query.filter(
+                HzHousingSubsidyRecord.spouse_name.isnot(None),
+                HzHousingSubsidyRecord.spouse_name != "",
+                HzHousingSubsidyRecord.spouse_name != "无"
+            )
+    if has_matched_talent is True or (isinstance(has_matched_talent, str) and has_matched_talent.strip().lower() in ("true", "1")):
+        # 精准筛选：申请人和申请单位与杭州企业高层次人才公示完全匹配的记录
+        query = query.filter(
+            exists().where(
+                and_(
+                    HzTalentNotice.person_name == HzHousingSubsidyRecord.applicant_name,
+                    HzTalentNotice.work_unit == HzHousingSubsidyRecord.applicant_unit
+                )
+            )
+        )
+    if isinstance(publish_date, str) and publish_date.strip():
+        p_date = publish_date.strip()
+        if len(p_date) == 10:
+            query = query.filter(HzHousingSubsidyRecord.publish_date == p_date)
+        else:
+            query = query.filter(cast(HzHousingSubsidyRecord.publish_date, String).ilike(f"%{p_date}%"))
+    if isinstance(keyword, str) and keyword.strip():
+        kw = f"%{keyword.strip()}%"
+        query = query.filter(
+            or_(
+                HzHousingSubsidyRecord.applicant_name.ilike(kw),
+                HzHousingSubsidyRecord.applicant_unit.ilike(kw),
+                HzHousingSubsidyRecord.applicant_talent_type.ilike(kw),
+                HzHousingSubsidyRecord.spouse_name.ilike(kw),
+                HzHousingSubsidyRecord.spouse_unit.ilike(kw),
+                HzHousingSubsidyRecord.biz_type.ilike(kw)
+            )
+        )
+
+    is_asc = (order.strip().lower() == "asc") if isinstance(order, str) else False
+    if is_asc:
+        query = query.order_by(HzHousingSubsidyRecord.publish_date.asc(), cast(HzHousingSubsidyRecord.seq, Integer).asc())
+    else:
+        query = query.order_by(desc(HzHousingSubsidyRecord.publish_date), cast(HzHousingSubsidyRecord.seq, Integer).asc())
+
+    page_num = page if isinstance(page, int) and page >= 1 else 1
+    p_size = page_size if isinstance(page_size, int) and page_size >= 1 else 20
+    if p_size > 200:
+        p_size = 200
+
+    total = query.count()
+    total_pages = math.ceil(total / p_size) if total > 0 else 1
+    records = query.offset((page_num - 1) * p_size).limit(p_size).all()
+
+    # 批量关联匹配杭州企业人才申报公示 (person_name == applicant_name && work_unit == applicant_unit)
+    applicant_names = [r.applicant_name.strip() for r in records if r.applicant_name and r.applicant_name.strip()]
+    applicant_units = [r.applicant_unit.strip() for r in records if r.applicant_unit and r.applicant_unit.strip()]
+
+    talent_match_map = {}
+    if applicant_names and applicant_units:
+        matched_talents = db.query(HzTalentNotice).filter(
+            HzTalentNotice.person_name.in_(applicant_names),
+            HzTalentNotice.work_unit.in_(applicant_units)
+        ).order_by(desc(HzTalentNotice.publish_date), desc(HzTalentNotice.id)).all()
+        for t in matched_talents:
+            key = (t.person_name.strip(), t.work_unit.strip())
+            if key not in talent_match_map:
+                talent_match_map[key] = {
+                    "id": t.id,
+                    "notice_id": t.notice_id,
+                    "person_name": t.person_name,
+                    "gender": t.gender,
+                    "birth_date": t.birth_date,
+                    "work_unit": t.work_unit,
+                    "accept_dept": t.accept_dept,
+                    "apply_type": t.apply_type,
+                    "clause": t.apply_type,
+                    "publicity_period": t.publicity_period,
+                    "publish_date": t.publish_date.isoformat() if t.publish_date else None,
+                    "detail_url": t.detail_url,
+                    "author": t.author,
+                    "content_text": t.content_text,
+                    "crawl_batch": t.crawl_batch,
+                    "created_at": t.created_at.isoformat() if t.created_at else None
+                }
+
+    items = []
+    for r in records:
+        name_key = (r.applicant_name.strip() if r.applicant_name else "", r.applicant_unit.strip() if r.applicant_unit else "")
+        matched = talent_match_map.get(name_key)
+        item = {
+            "id": r.id,
+            "notice_id": r.notice_id,
+            "seq": r.seq,
+            "biz_type": r.biz_type,
+            "applicant_name": r.applicant_name,
+            "applicant_unit": r.applicant_unit,
+            "applicant_talent_type": r.applicant_talent_type,
+            "spouse_name": r.spouse_name,
+            "spouse_unit": r.spouse_unit,
+            "publicity_period": r.publicity_period,
+            "publish_date": r.publish_date.isoformat() if r.publish_date else None,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "matched_talent": matched,
+            "matched_talent_notice_id": matched["notice_id"] if matched else None
+        }
+        items.append(item)
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page_num,
+        "page_size": p_size,
+        "total_pages": total_pages
+    }
+
+@router.get("/housing-subsidy-records/stats")
+def get_housing_subsidy_stats(
+    limit: int = Query(20, ge=5, le=100, description="返回前N家公司/单位"),
+    keyword: Optional[str] = Query(None, description="公司或单位名称过滤"),
+    db: Session = Depends(get_db)
+):
+    """
+    杭州高层次人才住房补贴专属统计指标：
+    1. 总体宏观指标 (总申报数、企业数、已婚有伴侣数、未填/单身数、已婚率、夫妻同单位数)
+    2. 人才类型分布 (A/B/C/D 类人数及占比)
+    3. 申请人单位排行榜 (Top N 申报单位、人才结构明细)
+    4. 伴侣生态分析 (伴侣热门工作单位 Top 10、夫妻单位关系分布)
+    """
+    from collections import defaultdict
+    import re
+
+    query = db.query(HzHousingSubsidyRecord)
+    if keyword and keyword.strip():
+        kw = f"%{keyword.strip()}%"
+        query = query.filter(
+            or_(
+                HzHousingSubsidyRecord.applicant_unit.ilike(kw),
+                HzHousingSubsidyRecord.spouse_unit.ilike(kw)
+            )
+        )
+
+    rows = query.all()
+    total_records = len(rows)
+
+    # 1. 人才类型统计
+    talent_type_counts = defaultdict(int)
+    for r in rows:
+        t = (r.applicant_talent_type or "").strip()
+        if "A" in t or "顶尖" in t:
+            talent_type_counts["A-顶尖人才"] += 1
+        elif "B" in t or "国家级" in t:
+            talent_type_counts["B-国家级领军"] += 1
+        elif "C" in t or "省级" in t:
+            talent_type_counts["C-省级领军"] += 1
+        elif "D" in t or "市级" in t:
+            talent_type_counts["D-市级领军"] += 1
+        else:
+            talent_type_counts[t if t else "其他"] += 1
+
+    # 2. 申请人单位统计
+    corp_map = defaultdict(lambda: {
+        "company": "",
+        "total": 0,
+        "a_count": 0,
+        "b_count": 0,
+        "c_count": 0,
+        "d_count": 0,
+        "other_count": 0,
+        "married_count": 0
+    })
+
+    # 3. 伴侣统计
+    has_spouse_cnt = 0
+    no_spouse_cnt = 0
+    same_unit_cnt = 0
+    diff_unit_cnt = 0
+    no_unit_cnt = 0
+    spouse_unit_counts = defaultdict(int)
+
+    for r in rows:
+        unit = (r.applicant_unit or "").strip()
+        if unit:
+            entry = corp_map[unit]
+            entry["company"] = unit
+            entry["total"] += 1
+            tt = (r.applicant_talent_type or "")
+            if "A" in tt or "顶尖" in tt:
+                entry["a_count"] += 1
+            elif "B" in tt or "国家级" in tt:
+                entry["b_count"] += 1
+            elif "C" in tt or "省级" in tt:
+                entry["c_count"] += 1
+            elif "D" in tt or "市级" in tt:
+                entry["d_count"] += 1
+            else:
+                entry["other_count"] += 1
+
+        spouse_name = (r.spouse_name or "").strip()
+        spouse_unit = (r.spouse_unit or "").strip()
+
+        if spouse_name:
+            has_spouse_cnt += 1
+            if unit:
+                corp_map[unit]["married_count"] += 1
+
+            if spouse_unit == unit:
+                same_unit_cnt += 1
+            elif spouse_unit and spouse_unit not in ("无", "待业", "待业在家", "自由职业", "无工作"):
+                diff_unit_cnt += 1
+                spouse_unit_counts[spouse_unit] += 1
+            else:
+                no_unit_cnt += 1
+                if spouse_unit:
+                    spouse_unit_counts[spouse_unit] += 1
+        else:
+            no_spouse_cnt += 1
+
+    # 排序申请人单位 Top N
+    sorted_comps = sorted(corp_map.values(), key=lambda x: (x["total"], x["b_count"] + x["c_count"]), reverse=True)
+    top_companies = sorted_comps[:limit]
+
+    # 排序伴侣热门单位 Top 15
+    sorted_spouse_units = sorted(spouse_unit_counts.items(), key=lambda x: x[1], reverse=True)[:15]
+    top_spouse_units = [{"unit": k, "count": v} for k, v in sorted_spouse_units]
+
+    married_rate = round((has_spouse_cnt / total_records * 100), 1) if total_records > 0 else 0
+
+    return {
+        "summary": {
+            "total_records": total_records,
+            "total_companies": len(corp_map),
+            "has_spouse_count": has_spouse_cnt,
+            "no_spouse_count": no_spouse_cnt,
+            "married_rate": married_rate,
+            "same_unit_count": same_unit_cnt,
+            "diff_unit_count": diff_unit_cnt,
+            "no_unit_count": no_unit_cnt
+        },
+        "talent_type_distribution": [
+            {"type": k, "count": v} for k, v in sorted(talent_type_counts.items(), key=lambda x: x[1], reverse=True)
+        ],
+        "top_companies": top_companies,
+        "top_spouse_units": top_spouse_units,
+        "spouse_relations": [
+            {"label": "夫妻跨单位就职", "count": diff_unit_cnt},
+            {"label": "夫妻同单位 (科研/名企夫妻)", "count": same_unit_cnt},
+            {"label": "伴侣自由职业/无单位/待业", "count": no_unit_cnt},
+            {"label": "未婚 / 未填伴侣", "count": no_spouse_cnt}
+        ]
+    }
 
 @router.get("/talent-notices/company-stats")
 def get_talent_company_stats(
@@ -688,6 +1009,34 @@ def get_talent_crawl_status(db: Session = Depends(get_db)):
         "started_at": crawler_manager.started_at.isoformat() if crawler_manager.started_at else None,
         "last_result": crawler_manager.last_result,
         "latest_run": latest_data
+    }
+
+@router.get("/talent-notices/{notice_id}")
+def get_talent_notice_detail(notice_id: str, db: Session = Depends(get_db)):
+    """获取单个杭州人才申报公示详细信息"""
+    notice = db.query(HzTalentNotice).filter(HzTalentNotice.notice_id == notice_id.strip()).first()
+    if not notice:
+        raise HTTPException(status_code=404, detail="未找到指定编号的人才公示记录")
+    return {
+        "id": notice.id,
+        "notice_id": notice.notice_id,
+        "notice_type": notice.notice_type,
+        "title": notice.title,
+        "person_name": notice.person_name,
+        "gender": notice.gender,
+        "birth_date": notice.birth_date,
+        "work_unit": notice.work_unit,
+        "accept_dept": notice.accept_dept,
+        "apply_type": notice.apply_type,
+        "publicity_period": notice.publicity_period,
+        "publish_date": notice.publish_date.isoformat() if notice.publish_date else None,
+        "detail_url": notice.detail_url,
+        "author": notice.author,
+        "content_text": notice.content_text,
+        "content_html": notice.content_html,
+        "crawl_batch": notice.crawl_batch,
+        "last_crawl_batch": notice.last_crawl_batch,
+        "created_at": notice.created_at.isoformat() if notice.created_at else None
     }
 
 # ----------------------------------------------------------------------
