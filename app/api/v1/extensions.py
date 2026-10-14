@@ -1289,7 +1289,10 @@ def list_github_contributions(
     repo_name: Optional[str] = Query(None, description="仓库名称精确过滤"),
     db: Session = Depends(get_db)
 ):
-    query = db.query(GithubContribution)
+    query = db.query(GithubContribution).filter(
+        GithubContribution.repo_owner != "loulanyue",
+        ~GithubContribution.pr_url.like("https://github.com/loulanyue/%")
+    )
     if isinstance(status, str) and status.strip():
         query = query.filter(GithubContribution.status == status.strip())
     if isinstance(is_security, int):
@@ -1340,7 +1343,10 @@ def list_github_prs(
     repo_name: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
-    query = db.query(GithubPrLifecycle)
+    query = db.query(GithubPrLifecycle).filter(
+        GithubPrLifecycle.repo_owner != "loulanyue",
+        ~GithubPrLifecycle.pr_url.like("https://github.com/loulanyue/%")
+    )
     if isinstance(state, str) and state.strip():
         query = query.filter(GithubPrLifecycle.state == state.strip())
     if isinstance(repo_name, str) and repo_name.strip():
@@ -1384,7 +1390,7 @@ def get_github_stats(
     db: Session = Depends(get_db)
 ):
     """
-    GitHub 开源治理多维统计：
+    GitHub 开源治理多维统计（严格剔除自身项目，仅统计外部开源项目）：
     1. 汇总概览: 项目总数、PR总数、合并数、开放数、关闭数、合并转化率、CVE/安全贡献数
     2. PR 状态视角: MERGED / OPEN / CLOSED 分布与占比
     3. 项目/仓库视角: Top N 仓库在各 PR 状态下的明细数据与排行榜
@@ -1392,29 +1398,46 @@ def get_github_stats(
     """
     from sqlalchemy import func, case
 
-    # 1. PR 生命周期全局概览
-    total_prs = db.query(func.count(GithubPrLifecycle.id)).scalar() or 0
-    merged_prs = db.query(func.count(GithubPrLifecycle.id)).filter(GithubPrLifecycle.state == "MERGED").scalar() or 0
-    open_prs = db.query(func.count(GithubPrLifecycle.id)).filter(GithubPrLifecycle.state == "OPEN").scalar() or 0
-    closed_prs = db.query(func.count(GithubPrLifecycle.id)).filter(GithubPrLifecycle.state == "CLOSED").scalar() or 0
-    total_repos = db.query(func.count(func.distinct(GithubPrLifecycle.repo_name))).scalar() or 0
+    # 1. PR 生命周期全局概览 (排除自身项目)
+    pr_base = db.query(GithubPrLifecycle).filter(
+        GithubPrLifecycle.repo_owner != "loulanyue",
+        ~GithubPrLifecycle.pr_url.like("https://github.com/loulanyue/%")
+    )
+    total_prs = pr_base.count()
+    merged_prs = pr_base.filter(GithubPrLifecycle.state == "MERGED").count()
+    open_prs = pr_base.filter(GithubPrLifecycle.state == "OPEN").count()
+    closed_prs = pr_base.filter(GithubPrLifecycle.state == "CLOSED").count()
+    total_repos = db.query(func.count(func.distinct(GithubPrLifecycle.repo_name))).filter(
+        GithubPrLifecycle.repo_owner != "loulanyue",
+        ~GithubPrLifecycle.pr_url.like("https://github.com/loulanyue/%")
+    ).scalar() or 0
     merge_rate = round((merged_prs / total_prs * 100), 1) if total_prs > 0 else 0.0
 
-    # 2. 开源贡献表全局概览
-    total_contribs = db.query(func.count(GithubContribution.id)).scalar() or 0
-    security_contribs = db.query(func.count(GithubContribution.id)).filter(GithubContribution.is_security == 1).scalar() or 0
-    contrib_repos = db.query(func.count(func.distinct(GithubContribution.repo_name))).scalar() or 0
-    contrib_open = db.query(func.count(GithubContribution.id)).filter(GithubContribution.status == "OPEN").scalar() or 0
-    contrib_closed = db.query(func.count(GithubContribution.id)).filter(GithubContribution.status == "CLOSED").scalar() or 0
-    contrib_merged = db.query(func.count(GithubContribution.id)).filter(GithubContribution.status == "MERGED").scalar() or 0
+    # 2. 开源贡献表全局概览 (排除自身项目)
+    contrib_base = db.query(GithubContribution).filter(
+        GithubContribution.repo_owner != "loulanyue",
+        ~GithubContribution.pr_url.like("https://github.com/loulanyue/%")
+    )
+    total_contribs = contrib_base.count()
+    security_contribs = contrib_base.filter(GithubContribution.is_security == 1).count()
+    contrib_repos = db.query(func.count(func.distinct(GithubContribution.repo_name))).filter(
+        GithubContribution.repo_owner != "loulanyue",
+        ~GithubContribution.pr_url.like("https://github.com/loulanyue/%")
+    ).scalar() or 0
+    contrib_open = contrib_base.filter(GithubContribution.status == "OPEN").count()
+    contrib_closed = contrib_base.filter(GithubContribution.status == "CLOSED").count()
+    contrib_merged = contrib_base.filter(GithubContribution.status == "MERGED").count()
 
-    # 3. 按仓库聚合 PR 状态分布
+    # 3. 按仓库聚合 PR 状态分布 (排除自身项目)
     repo_rows = db.query(
         GithubPrLifecycle.repo_name,
         func.count(GithubPrLifecycle.id).label("total"),
         func.sum(case((GithubPrLifecycle.state == "MERGED", 1), else_=0)).label("merged"),
         func.sum(case((GithubPrLifecycle.state == "OPEN", 1), else_=0)).label("open"),
         func.sum(case((GithubPrLifecycle.state == "CLOSED", 1), else_=0)).label("closed")
+    ).filter(
+        GithubPrLifecycle.repo_owner != "loulanyue",
+        ~GithubPrLifecycle.pr_url.like("https://github.com/loulanyue/%")
     ).group_by(GithubPrLifecycle.repo_name).all()
 
     repo_list = []
@@ -1452,11 +1475,14 @@ def get_github_stats(
         {"name": "已关闭 (CLOSED)", "state": "CLOSED", "count": closed_prs, "percentage": round(closed_prs / total_prs * 100, 1) if total_prs > 0 else 0.0, "color": "#64748b"}
     ]
 
-    # 5. 开源贡献 Top 仓库
+    # 5. 开源贡献 Top 仓库 (排除自身项目)
     contrib_repo_rows = db.query(
         GithubContribution.repo_name,
         func.count(GithubContribution.id).label("total"),
         func.sum(case((GithubContribution.is_security == 1, 1), else_=0)).label("security_count")
+    ).filter(
+        GithubContribution.repo_owner != "loulanyue",
+        ~GithubContribution.pr_url.like("https://github.com/loulanyue/%")
     ).group_by(GithubContribution.repo_name).order_by(func.count(GithubContribution.id).desc()).limit(limit).all()
 
     top_contrib_repos = [
@@ -1494,9 +1520,11 @@ def sync_github_prs_endpoint():
     通过 GitHub CLI (gh) 实时拉取并同步 loulanyue 的全部 PR 状态。
     更新 github_prs_lifecycle 与 github_contributions。
     """
-    from scripts.sync_github_prs import sync_github_prs_data
+    import importlib
+    import scripts.sync_github_prs as sync_mod
+    importlib.reload(sync_mod)
     try:
-        res = sync_github_prs_data()
+        res = sync_mod.sync_github_prs_data()
         return {
             "success": True,
             "message": "GitHub PR 状态同步完成",

@@ -20,6 +20,7 @@ from app.models.extensions import (
     QccCompanyBid, QccBidCrawlRun,
     TwitterFrontierTechPost
 )
+from app.models.contract import CodeContract, ContractRevision, ContractConsumer
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -42,10 +43,24 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
             "crawl_runs": db.query(func.count(HfTalentCrawlRun.id)).scalar() or 0
         },
         "github": {
-            "contributions": db.query(func.count(GithubContribution.id)).scalar() or 0,
-            "security_advisories": db.query(func.count(GithubContribution.id)).filter(GithubContribution.is_security == 1).scalar() or 0,
-            "prs_lifecycle": db.query(func.count(GithubPrLifecycle.id)).scalar() or 0,
-            "prs_merged": db.query(func.count(GithubPrLifecycle.id)).filter(GithubPrLifecycle.state == "MERGED").scalar() or 0
+            "contributions": db.query(func.count(GithubContribution.id)).filter(
+                GithubContribution.repo_owner != "loulanyue",
+                ~GithubContribution.pr_url.like("https://github.com/loulanyue/%")
+            ).scalar() or 0,
+            "security_advisories": db.query(func.count(GithubContribution.id)).filter(
+                GithubContribution.is_security == 1,
+                GithubContribution.repo_owner != "loulanyue",
+                ~GithubContribution.pr_url.like("https://github.com/loulanyue/%")
+            ).scalar() or 0,
+            "prs_lifecycle": db.query(func.count(GithubPrLifecycle.id)).filter(
+                GithubPrLifecycle.repo_owner != "loulanyue",
+                ~GithubPrLifecycle.pr_url.like("https://github.com/loulanyue/%")
+            ).scalar() or 0,
+            "prs_merged": db.query(func.count(GithubPrLifecycle.id)).filter(
+                GithubPrLifecycle.state == "MERGED",
+                GithubPrLifecycle.repo_owner != "loulanyue",
+                ~GithubPrLifecycle.pr_url.like("https://github.com/loulanyue/%")
+            ).scalar() or 0
         },
         "jobs": {
             "positions": db.query(func.count(JobPosition.id)).scalar() or 0,
@@ -104,6 +119,12 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
                 TwitterFrontierTechPost.content_zh.isnot(None),
                 TwitterFrontierTechPost.content_zh != ""
             ).scalar() or 0
+        },
+        "contracts": {
+            "total_contracts": db.query(func.count(CodeContract.id)).scalar() or 0,
+            "total_revisions": db.query(func.count(ContractRevision.id)).scalar() or 0,
+            "total_consumers": db.query(func.count(ContractConsumer.id)).scalar() or 0,
+            "frozen_contracts": db.query(func.count(CodeContract.id)).filter(CodeContract.is_breaking_frozen == True).scalar() or 0
         }
     }
 

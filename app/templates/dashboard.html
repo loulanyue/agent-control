@@ -768,17 +768,17 @@
           <div class="hidden xl:flex items-center gap-1">
             <button
               v-for="st in [
-                { label: '全部', val: '' },
-                { label: '已合并', val: 'MERGED', badge: '103' },
-                { label: '开放中', val: 'OPEN', badge: '150' },
-                { label: '已关闭', val: 'CLOSED', badge: '224' }
+                { label: '全部', val: '', badge: currentSubTab.endpoint === '/api/v1/extensions/github-prs' ? (githubStats.summary.total_prs || '355') : (githubStats.summary.total_contributions || '237') },
+                { label: '已合并', val: 'MERGED', badge: currentSubTab.endpoint === '/api/v1/extensions/github-prs' ? (githubStats.summary.merged_prs || '29') : (githubStats.summary.contrib_merged || '12') },
+                { label: '开放中', val: 'OPEN', badge: currentSubTab.endpoint === '/api/v1/extensions/github-prs' ? (githubStats.summary.open_prs || '59') : (githubStats.summary.contrib_open || '58') },
+                { label: '已关闭', val: 'CLOSED', badge: currentSubTab.endpoint === '/api/v1/extensions/github-prs' ? (githubStats.summary.closed_prs || '267') : (githubStats.summary.contrib_closed || '167') }
               ]"
               :key="st.val"
               @click="filterGithubState = st.val; handleSearch()"
               :class="filterGithubState === st.val ? 'bg-indigo-600 text-white border-indigo-500 font-bold shadow-sm' : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 border-slate-700'"
               class="px-2 py-1 rounded text-[11px] border transition inline-flex items-center gap-1 font-mono">
               <span>[[ st.label ]]</span>
-              <span v-if="st.badge" class="px-1 py-0.2 rounded text-[10px] bg-slate-700/80 text-slate-300 font-mono">[[ st.badge ]]</span>
+              <span v-if="st.badge !== undefined" class="px-1 py-0.2 rounded text-[10px] bg-slate-700/80 text-slate-300 font-mono">[[ st.badge ]]</span>
             </button>
             <button
               v-if="currentSubTab.endpoint === '/api/v1/extensions/github-contributions'"
@@ -788,7 +788,7 @@
               title="仅筛选标有安全漏洞编号(GHSA)的贡献">
               <i class="fa-solid fa-shield-halved text-amber-400 text-xs"></i>
               <span>安全漏洞/CVE</span>
-              <span class="px-1 py-0.2 rounded text-[10px] bg-amber-500/20 text-amber-200 font-mono font-bold">5条</span>
+              <span class="px-1 py-0.2 rounded text-[10px] bg-amber-500/20 text-amber-200 font-mono font-bold">[[ githubStats.summary.security_contributions || 5 ]]条</span>
             </button>
           </div>
 
@@ -814,6 +814,97 @@
             @click="clearGithubFilters"
             class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs flex-shrink-0 transition border border-slate-700">
             重置
+          </button>
+          <button
+            @click="syncGithubPrs"
+            :disabled="githubSyncing"
+            class="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white rounded-lg border border-emerald-500/40 text-xs font-medium flex-shrink-0 transition inline-flex items-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            title="通过 GitHub CLI 实时同步 loulanyue 账号下全部 PR 生命周期与开源贡献最新状态">
+            <i class="fa-solid fa-arrows-rotate" :class="{ 'fa-spin': githubSyncing }"></i>
+            <span>[[ githubSyncing ? '同步中...' : '同步PR状态' ]]</span>
+          </button>
+        </div>
+
+        <!-- 编码契约与架构仲裁专属筛选栏 -->
+        <div v-else-if="currentMenuId === 'contracts'" class="flex flex-wrap items-center gap-2.5 flex-1 min-w-[320px]">
+          <!-- 1. 所属服务模块筛选 -->
+          <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+            <i class="fa-solid fa-server text-indigo-400"></i>
+            <span class="text-slate-400 text-[11px] select-none">所属服务:</span>
+            <select
+              v-model="filterContractService"
+              @change="handleSearch"
+              class="bg-transparent text-slate-200 focus:outline-none cursor-pointer">
+              <option value="">全部模块</option>
+              <option value="tpm-backend-app">tpm-backend-app (后端业务)</option>
+              <option value="tpm-frontend-web">tpm-frontend-web (前端界面)</option>
+              <option value="agent-control">agent-control (管控调度)</option>
+            </select>
+          </div>
+
+          <!-- 2. 规范格式筛选 -->
+          <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+            <i class="fa-solid fa-file-code text-amber-400"></i>
+            <span class="text-slate-400 text-[11px] select-none">规范格式:</span>
+            <select
+              v-model="filterContractType"
+              @change="handleSearch"
+              class="bg-transparent text-slate-200 focus:outline-none cursor-pointer">
+              <option value="">全部格式</option>
+              <option value="OpenAPI">OpenAPI (REST接口)</option>
+              <option value="JSONSchema">JSONSchema (数据约束)</option>
+              <option value="JavaDTO">JavaDTO (分层调用)</option>
+              <option value="TypeScriptType">TypeScript (类型系统)</option>
+            </select>
+          </div>
+
+          <!-- 3. 破坏性冻结快速过滤 -->
+          <button
+            @click="toggleContractFrozenFilter"
+            :class="filterContractFrozen === true ? 'bg-rose-600/30 text-rose-300 border-rose-500/50 font-bold' : 'bg-slate-800 text-slate-400 hover:text-slate-200 border-slate-700'"
+            class="px-2.5 py-1.5 rounded-lg text-xs border transition inline-flex items-center gap-1.5 font-mono"
+            title="筛选破坏性冻结中的关键契约 (Major Breaking Frozen)">
+            <i class="fa-solid fa-shield-halved text-rose-400"></i>
+            <span>已破坏性冻结</span>
+          </button>
+
+          <!-- 4. 综合搜索输入框 -->
+          <div class="relative min-w-[200px] flex-1">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+            <input
+              type="text"
+              v-model="searchKeyword"
+              @keyup.enter="handleSearch"
+              placeholder="搜索契约编号(CTR-ID)、接口端点、标题、责任方..."
+              class="w-full pl-8 pr-4 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+          </div>
+
+          <!-- 操作按钮组 -->
+          <button
+            @click="handleSearch"
+            class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium flex-shrink-0 transition shadow-sm">
+            查询
+          </button>
+          <button
+            v-if="searchKeyword || filterContractService || filterContractType || filterContractFrozen !== ''"
+            @click="clearContractFilters"
+            class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs flex-shrink-0 transition border border-slate-700">
+            重置
+          </button>
+
+          <!-- 语法在线校验 & 新建契约快捷入口 -->
+          <button
+            @click="openVerifySchemaModal"
+            class="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white rounded-lg border border-emerald-500/40 text-xs font-medium flex-shrink-0 transition inline-flex items-center gap-1.5 shadow-sm"
+            title="在线校验 OpenAPI / JSONSchema / DTO 文本规范">
+            <i class="fa-solid fa-code text-xs"></i>
+            <span>语法校验器</span>
+          </button>
+          <button
+            @click="openNewContractModal"
+            class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex-shrink-0 transition inline-flex items-center gap-1.5 shadow-md shadow-indigo-600/30">
+            <i class="fa-solid fa-plus text-xs"></i>
+            <span>录入契约</span>
           </button>
         </div>
 
@@ -2402,7 +2493,7 @@
                   class="px-3 py-1 rounded-md text-xs transition flex items-center gap-1.5">
                   <i class="fa-solid fa-code-pull-request text-[11px]"></i>
                   <span>PR 状态与项目透视</span>
-                  <span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-1 py-0.2 rounded font-mono font-bold border border-emerald-500/30">477 PRs</span>
+                  <span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-1 py-0.2 rounded font-mono font-bold border border-emerald-500/30">[[ githubStats.summary.total_prs || 355 ]] PRs</span>
                 </button>
                 <button
                   @click="switchGithubActiveTab('contribs')"
@@ -2410,7 +2501,7 @@
                   class="px-3 py-1 rounded-md text-xs transition flex items-center gap-1.5">
                   <i class="fa-solid fa-shield-halved text-[11px] text-amber-400"></i>
                   <span>开源贡献与 CVE 透视</span>
-                  <span class="text-[9px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-mono font-bold border border-amber-500/30">5 GHSA</span>
+                  <span class="text-[9px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-mono font-bold border border-amber-500/30">[[ githubStats.summary.security_contributions || 5 ]] GHSA</span>
                 </button>
               </div>
             </div>
@@ -2633,6 +2724,129 @@
           </div>
         </div>
 
+        <!-- 编码契约与架构仲裁中心专属全景 KPI 看板 -->
+        <div
+          v-if="currentMenuId === 'contracts'"
+          class="mb-4 bg-slate-900/70 border border-slate-800/90 rounded-xl overflow-hidden shadow-xl backdrop-blur">
+          
+          <!-- 看板 Header 与操作栏 -->
+          <div class="px-4 py-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-850/60">
+            <div class="flex items-center space-x-3">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
+                  <i class="fa-solid fa-scale-balanced text-sm"></i>
+                </div>
+                <div>
+                  <h3 class="text-xs font-bold text-white flex items-center gap-1.5">
+                    编码契约机器可读与架构仲裁体系
+                    <span class="text-[9px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.2 rounded font-mono font-bold border border-indigo-500/30">契约与仲裁层</span>
+                  </h3>
+                  <p class="text-[11px] text-slate-400 font-mono mt-0.5">
+                    SemVer版本唯一编号 · 契约变更独立PR审批 · 破坏性冻结防AI弱化 · 消费端拓扑全景图
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- 右侧控制区: 快捷操作 -->
+            <div class="flex items-center gap-2">
+              <button
+                @click="openVerifySchemaModal"
+                class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-code text-indigo-400"></i>
+                <span>Schema 在线语法校验</span>
+              </button>
+              <button
+                @click="openNewContractModal"
+                class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-indigo-600/30 transition">
+                <i class="fa-solid fa-plus text-xs"></i>
+                <span>录入新契约</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 4 大核心指标卡片 -->
+          <div class="p-4 grid grid-cols-2 md:grid-cols-4 gap-3 bg-slate-900/40">
+            <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+              <div class="text-[11px] text-slate-400 flex items-center justify-between">
+                <span>契约规范总库</span>
+                <i class="fa-solid fa-file-contract text-indigo-400"></i>
+              </div>
+              <div class="text-xl font-bold font-mono text-white mt-1">
+                [[ contractStats.total_contracts || 6 ]]
+                <span class="text-xs font-normal text-slate-400 ml-1">项规范</span>
+              </div>
+              <div class="text-[10px] text-emerald-400 font-mono mt-0.5 flex items-center gap-1">
+                <i class="fa-solid fa-check"></i>
+                <span>OpenAPI / JSONSchema / DTO</span>
+              </div>
+            </div>
+
+            <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+              <div class="text-[11px] text-slate-400 flex items-center justify-between">
+                <span>修订演进流水线</span>
+                <i class="fa-solid fa-code-branch text-amber-400"></i>
+              </div>
+              <div class="text-xl font-bold font-mono text-amber-400 mt-1">
+                [[ contractStats.total_revisions || 9 ]]
+                <span class="text-xs font-normal text-slate-400 ml-1">次审计</span>
+              </div>
+              <div class="text-[10px] text-amber-400 font-mono mt-0.5 flex items-center gap-1">
+                <i class="fa-solid fa-lock"></i>
+                <span>独立 PR 审批归档不可篡改</span>
+              </div>
+            </div>
+
+            <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+              <div class="text-[11px] text-slate-400 flex items-center justify-between">
+                <span>消费端依赖拓扑</span>
+                <i class="fa-solid fa-network-wired text-sky-400"></i>
+              </div>
+              <div class="text-xl font-bold font-mono text-sky-400 mt-1">
+                [[ contractStats.total_consumers || 11 ]]
+                <span class="text-xs font-normal text-slate-400 ml-1">个依赖</span>
+              </div>
+              <div class="text-[10px] text-sky-400 font-mono mt-0.5 flex items-center gap-1">
+                <i class="fa-solid fa-link"></i>
+                <span>前后端/Agent消费端双向对齐</span>
+              </div>
+            </div>
+
+            <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+              <div class="text-[11px] text-slate-400 flex items-center justify-between">
+                <span>破坏性变更冻结</span>
+                <i class="fa-solid fa-shield-halved text-rose-400"></i>
+              </div>
+              <div class="text-xl font-bold font-mono text-rose-400 mt-1">
+                [[ contractStats.frozen_contracts || 4 ]]
+                <span class="text-xs font-normal text-slate-400 ml-1">项高危锁定</span>
+              </div>
+              <div class="text-[10px] text-rose-400 font-mono mt-0.5 flex items-center gap-1">
+                <i class="fa-solid fa-ban"></i>
+                <span>阻断弱化测试与跳过约束</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 仲裁优先级宣言条 -->
+          <div class="px-4 py-2.5 bg-indigo-950/30 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div class="flex items-center gap-2 text-indigo-300">
+              <span class="font-bold text-amber-400 flex items-center gap-1">
+                <i class="fa-solid fa-gavel text-amber-400"></i>
+                仲裁优先级原则:
+              </span>
+              <span class="font-mono bg-indigo-900/60 text-indigo-200 px-2 py-0.5 rounded border border-indigo-700/60 font-semibold">
+                契约 &gt; 测试 &gt; 架构规则 &gt; 现有代码 &gt; AI的判断
+              </span>
+              <span class="text-slate-400 hidden xl:inline">· 冲突时 AI 只能上报不可自行裁决，严禁弱化断言让检查通过</span>
+            </div>
+            <div class="flex items-center gap-3 text-slate-400 font-mono text-[11px]">
+              <span class="flex items-center gap-1 text-emerald-400"><i class="fa-solid fa-shield-halved"></i> 架构守卫卡点</span>
+              <span class="flex items-center gap-1 text-sky-400"><i class="fa-solid fa-file-signature"></i> 契约变更单独走PR</span>
+            </div>
+          </div>
+        </div>
+
         <!-- 加载中遮罩 -->
         <div v-if="loading" class="absolute inset-0 bg-slate-950/60 backdrop-blur-[2px] flex items-center justify-center z-10">
           <div class="flex flex-col items-center gap-2">
@@ -2686,9 +2900,9 @@
                 class="hover:bg-slate-800/40 transition-colors group">
                 
                 <td v-for="col in currentColumns" :key="col.key" class="px-4 py-3 text-slate-300 whitespace-nowrap" :class="col.cellClass || ''">
-                  <!-- 岗位名称/申报人/要素核心名称/招投标项目：支持点击直接打开完整详情抽屉 -->
+                  <!-- 岗位名称/申报人/要素核心名称/招投标项目/契约编号与标题：支持点击直接打开完整详情抽屉 -->
                   <button
-                    v-if="col.key === 'position_title' || col.key === 'person_name' || col.key === 'item_name' || col.key === 'project_name'"
+                    v-if="col.key === 'position_title' || col.key === 'person_name' || col.key === 'item_name' || col.key === 'project_name' || col.key === 'contract_id' || col.key === 'title'"
                     @click.stop="viewDetail(row)"
                     type="button"
                     class="text-left font-bold text-indigo-300 hover:text-white hover:underline transition-all inline-flex items-center gap-1.5 cursor-pointer group/title select-text"
@@ -3166,6 +3380,109 @@
                 </div>
               </div>
             </div>
+          <!-- 编码契约专属详情布局 (契约中心) -->
+          <template v-else-if="detailRow.contract_id">
+            <!-- 核心指标卡片 -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
+              <div class="flex flex-col">
+                <span class="text-[11px] text-slate-500 font-mono">契约唯一编号</span>
+                <span class="text-xs font-bold text-indigo-400 font-mono mt-0.5 select-all">[[ detailRow.contract_id ]]</span>
+              </div>
+              <div class="flex flex-col">
+                <span class="text-[11px] text-slate-500 font-mono">规范版本 (SemVer)</span>
+                <span class="text-xs font-bold font-mono text-amber-400 mt-0.5">v[[ detailRow.version || '1.0.0' ]]</span>
+              </div>
+              <div class="flex flex-col">
+                <span class="text-[11px] text-slate-500 font-mono">所属服务模块</span>
+                <span class="text-xs font-semibold text-slate-200 mt-0.5 truncate font-mono">[[ detailRow.service_name || '-' ]]</span>
+              </div>
+              <div class="flex flex-col">
+                <span class="text-[11px] text-slate-500 font-mono">责任架构方 / Owner</span>
+                <span class="text-xs font-medium text-emerald-400 mt-0.5">[[ detailRow.owner || 'ArchitectureTeam' ]]</span>
+              </div>
+            </div>
+
+            <!-- 规则约束与锁定状态卡片 -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs bg-slate-950/50 p-3 rounded-xl border border-slate-800/80">
+              <div class="flex items-center gap-2">
+                <span class="text-slate-500 text-[11px]">契约大类：</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                  [[ detailRow.category || 'api' ]]
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-slate-500 text-[11px]">格式类型：</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                  [[ detailRow.contract_type || 'OpenAPI' ]]
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-slate-500 text-[11px]">变更策略：</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-sky-500/15 text-sky-300 border border-sky-500/30">
+                  [[ detailRow.change_policy || 'independent_pr_required' ]]
+                </span>
+              </div>
+              <div class="flex items-center gap-2 col-span-2 sm:col-span-3">
+                <span class="text-slate-500 text-[11px]">破坏性防护：</span>
+                <span v-if="detailRow.is_breaking_frozen" class="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30 flex items-center gap-1">
+                  <i class="fa-solid fa-lock text-rose-400"></i>
+                  已开启破坏性变更冻结 (Breaking Changes Frozen) · 严禁降级或弱化断言
+                </span>
+                <span v-else class="px-2 py-0.5 rounded text-[11px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
+                  可渐进兼容演进 (Permit Non-breaking Changes)
+                </span>
+              </div>
+            </div>
+
+            <!-- 端点或代码路径 -->
+            <div v-if="detailRow.endpoint_or_path" class="space-y-1.5">
+              <div class="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                <i class="fa-solid fa-link text-slate-400"></i>
+                <span>接口端点 / 代码包路径</span>
+              </div>
+              <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-xs font-mono text-sky-300 select-all">
+                [[ detailRow.endpoint_or_path ]]
+              </div>
+            </div>
+
+            <!-- 业务描述与语义约定 -->
+            <div v-if="detailRow.description" class="space-y-1.5">
+              <div class="flex items-center gap-1.5 text-xs font-semibold text-indigo-400 uppercase tracking-wider">
+                <i class="fa-solid fa-circle-info text-indigo-400"></i>
+                <span>业务语义约定与互斥守卫规则</span>
+              </div>
+              <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800/80 text-xs text-slate-200 leading-relaxed font-sans select-text">
+                [[ detailRow.description ]]
+              </div>
+            </div>
+
+            <!-- 机器可读规范定义 (Schema Specification Code Box) -->
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 uppercase tracking-wider">
+                  <i class="fa-solid fa-code text-emerald-400"></i>
+                  <span>机器可读规范文本 (Schema Definition)</span>
+                  <span class="text-[10px] font-mono text-slate-400">([[ detailRow.contract_type ]])</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    @click="openVerifyWithCurrentContract(detailRow)"
+                    class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 rounded text-[11px] transition inline-flex items-center gap-1 font-mono">
+                    <i class="fa-solid fa-vial-circle-check text-xs"></i>
+                    语法校验
+                  </button>
+                  <button
+                    @click="copyContractSpec(detailRow)"
+                    class="px-2 py-0.5 bg-indigo-600/30 hover:bg-indigo-600 text-white rounded text-[11px] transition inline-flex items-center gap-1 font-mono">
+                    <i class="fa-regular fa-copy text-xs"></i>
+                    复制规范
+                  </button>
+                </div>
+              </div>
+              <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs font-mono text-emerald-300 overflow-x-auto max-h-72 leading-relaxed whitespace-pre select-all">
+                <code>[[ detailRow.schema_content || detailRow.schema_snapshot || '// 暂无文本快照' ]]</code>
+              </div>
+            </div>
           </template>
 
           <!-- 通用非岗位非人才记录布局 (原有渲染逻辑) -->
@@ -3274,6 +3591,21 @@
                 <i class="fa-brands fa-x-twitter text-sm"></i>
                 前往 X 查看原帖
               </a>
+            </template>
+            <!-- 编码契约专属操作 -->
+            <template v-else-if="detailRow.contract_id">
+              <button
+                @click="copyContractSpec(detailRow)"
+                class="px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-medium inline-flex items-center gap-1.5 transition">
+                <i class="fa-regular fa-copy text-[11px]"></i>
+                复制规范定义
+              </button>
+              <button
+                @click="openVerifyWithCurrentContract(detailRow)"
+                class="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-medium inline-flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-vial-circle-check text-[11px]"></i>
+                在线语法校验
+              </button>
             </template>
             <span v-else class="text-[11px] text-slate-500 font-mono">
               [[ detailRow.id ? '记录编号: ' + detailRow.id : '' ]]
@@ -4101,6 +4433,246 @@
             保存并刷新
           </button>
         </div>
+    <!-- 1. Schema 在线语法校验模态框 (Verify Schema Modal) -->
+    <div v-if="verifyModalVisible" @click.self="verifyModalVisible = false" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer">
+      <div @click.stop class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150 cursor-default">
+        <!-- Header -->
+        <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-850">
+          <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+              <i class="fa-solid fa-vial-circle-check text-sm"></i>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-white">Schema 在线语法与结构校验器</h3>
+              <p class="text-[11px] text-slate-400">实时解析验证 OpenAPI、JSONSchema、JavaDTO 或类型定义语法完整性</p>
+            </div>
+          </div>
+          <button @click="verifyModalVisible = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+          <!-- 格式规范选择 -->
+          <div class="flex items-center gap-3">
+            <label class="text-xs font-semibold text-slate-300">规范类型:</label>
+            <div class="flex items-center gap-2">
+              <button
+                v-for="t in ['OpenAPI', 'JSONSchema', 'JavaDTO', 'TypeScriptType']"
+                :key="t"
+                @click="verifyType = t"
+                :class="verifyType === t ? 'bg-indigo-600 text-white font-bold' : 'bg-slate-800 text-slate-400 hover:text-white'"
+                class="px-2.5 py-1 rounded-lg text-xs font-mono transition border border-slate-700">
+                [[ t ]]
+              </button>
+            </div>
+          </div>
+
+          <!-- 文本编辑框 -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between text-xs text-slate-400">
+              <span>待校验契约规范文本内容:</span>
+              <span class="font-mono text-[11px]">[[ verifyContent ? verifyContent.length + ' 字符' : '0 字符' ]]</span>
+            </div>
+            <textarea
+              v-model="verifyContent"
+              rows="10"
+              placeholder="请粘贴 OpenAPI YAML / JSONSchema JSON / DTO 类代码..."
+              class="w-full p-3.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-emerald-300 placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"></textarea>
+          </div>
+
+          <!-- 校验结果展示区 -->
+          <div v-if="verifyResult" class="p-4 rounded-xl border text-xs" :class="verifyResult.valid ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/30 border-rose-500/40 text-rose-300'">
+            <div class="flex items-center gap-2 font-bold mb-1">
+              <i :class="verifyResult.valid ? 'fa-solid fa-circle-check text-emerald-400' : 'fa-solid fa-circle-xmark text-rose-400'"></i>
+              <span>[[ verifyResult.valid ? '语法解析校验通过！规范完全有效' : '语法解析失败，存在结构或语法错误' ]]</span>
+            </div>
+            <div class="font-mono text-[11px] space-y-0.5 mt-1 text-slate-300">
+              <div v-if="verifyResult.format">格式归一: <span class="text-white">[[ verifyResult.format ]]</span></div>
+              <div v-if="verifyResult.keys_count !== undefined">字段属性总数: <span class="text-white">[[ verifyResult.keys_count ]]</span></div>
+              <div v-if="verifyResult.is_openapi_spec !== undefined">OpenAPI 根标识: <span class="text-white">[[ verifyResult.is_openapi_spec ? '已就绪' : '未包含' ]]</span></div>
+              <div v-if="verifyResult.lines_count !== undefined">有效代码行: <span class="text-white">[[ verifyResult.lines_count ]]</span></div>
+              <div v-if="verifyResult.error" class="text-rose-400 font-mono break-all mt-1 bg-rose-950/50 p-2 rounded border border-rose-900/60">
+                [[ verifyResult.error ]]
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="px-6 py-3.5 border-t border-slate-800 bg-slate-900 flex items-center justify-end gap-2">
+          <button
+            @click="verifyModalVisible = false"
+            class="px-4 py-1.5 text-xs text-slate-400 hover:text-white rounded-lg transition">
+            关闭
+          </button>
+          <button
+            @click="runVerifySchema"
+            :disabled="verifyingSchema || !verifyContent.trim()"
+            class="px-4 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow transition disabled:opacity-50 flex items-center gap-1.5">
+            <i :class="verifyingSchema ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-vial-circle-check'"></i>
+            <span>[[ verifyingSchema ? '校验中...' : '立即校验' ]]</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. 录入新编码契约模态框 (New Contract Modal) -->
+    <div v-if="newContractModalVisible" @click.self="newContractModalVisible = false" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer">
+      <div @click.stop class="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150 cursor-default">
+        <!-- Header -->
+        <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-850">
+          <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
+              <i class="fa-solid fa-file-contract text-sm"></i>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-white">录入新编码契约规范</h3>
+              <p class="text-[11px] text-slate-400">建立唯一 SemVer 契约编号，沉淀机器可读 Schema 并生成初始修订快照</p>
+            </div>
+          </div>
+          <button @click="newContractModalVisible = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <!-- Form Body -->
+        <div class="p-6 space-y-4 max-h-[72vh] overflow-y-auto">
+          <!-- 行1: 契约编号 + 标题 -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">契约编号 (CTR-ID) <span class="text-rose-400">*</span></label>
+              <input
+                type="text"
+                v-model="newContractForm.contract_id"
+                placeholder="例如: CTR-TPM-ORDER-003"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-indigo-300 focus:outline-none focus:border-indigo-500">
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">契约定义标题 <span class="text-rose-400">*</span></label>
+              <input
+                type="text"
+                v-model="newContractForm.title"
+                placeholder="例如: 采购合同签署状态同步契约"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500">
+            </div>
+          </div>
+
+          <!-- 行2: 服务模块 + 格式类型 + SemVer版本 -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">所属模块</label>
+              <select
+                v-model="newContractForm.service_name"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer">
+                <option value="tpm-backend-app">tpm-backend-app</option>
+                <option value="tpm-frontend-web">tpm-frontend-web</option>
+                <option value="agent-control">agent-control</option>
+                <option value="tpm-backend-file">tpm-backend-file</option>
+              </select>
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">规范类型</label>
+              <select
+                v-model="newContractForm.contract_type"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer">
+                <option value="OpenAPI">OpenAPI</option>
+                <option value="JSONSchema">JSONSchema</option>
+                <option value="JavaDTO">JavaDTO</option>
+                <option value="TypeScriptType">TypeScriptType</option>
+                <option value="Protobuf">Protobuf</option>
+              </select>
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">初始版本 (SemVer)</label>
+              <input
+                type="text"
+                v-model="newContractForm.version"
+                placeholder="1.0.0"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-amber-400 focus:outline-none focus:border-indigo-500">
+            </div>
+          </div>
+
+          <!-- 行3: 接口端点 / 代码路径 + 责任方 -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">接口端点 / 包路径</label>
+              <input
+                type="text"
+                v-model="newContractForm.endpoint_or_path"
+                placeholder="/api/purchase/contract/sign"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-slate-300 focus:outline-none focus:border-indigo-500">
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">责任架构方 / Owner</label>
+              <input
+                type="text"
+                v-model="newContractForm.owner"
+                placeholder="集中采购组 / 架构守卫委员会"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500">
+            </div>
+          </div>
+
+          <!-- 行4: 破坏性变更锁定 + 变更策略 -->
+          <div class="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <input
+                type="checkbox"
+                id="breakingFrozenCheck"
+                v-model="newContractForm.is_breaking_frozen"
+                class="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 border-slate-700 bg-slate-900 cursor-pointer">
+              <label for="breakingFrozenCheck" class="text-xs text-slate-200 cursor-pointer select-none">
+                <span class="font-bold text-rose-400">启用破坏性变更冻结 (Breaking Freeze)</span>
+                <p class="text-[11px] text-slate-500">锁定后禁止提交任何破坏性变更或被AI弱化断言，必须通过架构委员会特批</p>
+              </label>
+            </div>
+          </div>
+
+          <!-- 行5: 机器可读Schema定义内容 -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-semibold text-emerald-400">Schema规范文本内容 (YAML / JSON / 代码) <span class="text-rose-400">*</span></label>
+              <button
+                type="button"
+                @click="fillExampleSchema"
+                class="text-[11px] text-indigo-400 hover:text-indigo-300 font-mono">
+                载入样例模版
+              </button>
+            </div>
+            <textarea
+              v-model="newContractForm.schema_content"
+              rows="8"
+              placeholder="请粘贴 OpenAPI YAML 或 JSONSchema 规范文本..."
+              class="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-emerald-300 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"></textarea>
+          </div>
+
+          <!-- 行6: 业务描述与语义约定 -->
+          <div class="space-y-1">
+            <label class="text-xs font-semibold text-slate-300">业务语义约定与互斥守卫规则</label>
+            <textarea
+              v-model="newContractForm.description"
+              rows="3"
+              placeholder="说明此契约的业务互斥规则、数据隔离逻辑、异常兜底处理等..."
+              class="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="px-6 py-3.5 border-t border-slate-800 bg-slate-900 flex items-center justify-end gap-2">
+          <button
+            @click="newContractModalVisible = false"
+            class="px-4 py-1.5 text-xs text-slate-400 hover:text-white rounded-lg transition">
+            取消
+          </button>
+          <button
+            @click="submitNewContract"
+            :disabled="submittingContract || !newContractForm.contract_id.trim() || !newContractForm.title.trim() || !newContractForm.schema_content.trim()"
+            class="px-4 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow transition disabled:opacity-50 flex items-center gap-1.5">
+            <i :class="submittingContract ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-check'"></i>
+            <span>[[ submittingContract ? '正在提交...' : '确认录入并生成Revision #1' ]]</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -4135,6 +4707,187 @@
             headers['X-API-Key'] = token;
           }
           return headers;
+        };
+
+        // 编码契约与架构仲裁中心 (Phase 1)
+        const contractStats = ref({
+          total_contracts: 6,
+          active_contracts: 6,
+          draft_contracts: 0,
+          frozen_contracts: 4,
+          total_revisions: 9,
+          total_consumers: 11
+        });
+        const filterContractService = ref('');
+        const filterContractType = ref('');
+        const filterContractFrozen = ref(''); // '' or true or false
+
+        const toggleContractFrozenFilter = () => {
+          if (filterContractFrozen.value === true) {
+            filterContractFrozen.value = '';
+          } else {
+            filterContractFrozen.value = true;
+          }
+          handleSearch();
+        };
+
+        const clearContractFilters = () => {
+          filterContractService.value = '';
+          filterContractType.value = '';
+          filterContractFrozen.value = '';
+          searchKeyword.value = '';
+          handleSearch();
+        };
+
+        const fetchContractStats = async () => {
+          try {
+            const resp = await fetch('/api/v1/contracts/stats', {
+              headers: getAuthHeaders()
+            });
+            if (resp.ok) {
+              const data = await resp.json();
+              contractStats.value = data;
+            }
+          } catch (e) {
+            console.error('fetchContractStats error:', e);
+          }
+        };
+
+        // Schema 在线语法校验模态框逻辑
+        const verifyModalVisible = ref(false);
+        const verifyingSchema = ref(false);
+        const verifyType = ref('OpenAPI');
+        const verifyContent = ref('');
+        const verifyResult = ref(null);
+
+        const openVerifySchemaModal = () => {
+          verifyModalVisible.value = true;
+          if (!verifyContent.value) {
+            verifyContent.value = `openapi: 3.0.3\ninfo:\n  title: 示例契约规范\n  version: 1.0.0\npaths:\n  /api/demo:\n    get:\n      responses:\n        '200':\n          description: OK`;
+          }
+        };
+
+        const openVerifyWithCurrentContract = (contractRow) => {
+          verifyType.value = contractRow.contract_type || 'OpenAPI';
+          verifyContent.value = contractRow.schema_content || contractRow.schema_snapshot || '';
+          verifyResult.value = null;
+          verifyModalVisible.value = true;
+          runVerifySchema();
+        };
+
+        const runVerifySchema = async () => {
+          if (!verifyContent.value.trim()) return;
+          verifyingSchema.value = true;
+          verifyResult.value = null;
+          try {
+            const resp = await fetch('/api/v1/contracts/verify-schema', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+              body: JSON.stringify({
+                contract_type: verifyType.value,
+                content: verifyContent.value
+              })
+            });
+            const data = await resp.json();
+            verifyResult.value = data;
+          } catch (e) {
+            verifyResult.value = { valid: false, error: e.message || '网络或服务端异常' };
+          } finally {
+            verifyingSchema.value = false;
+          }
+        };
+
+        // 录入新契约模态框逻辑
+        const newContractModalVisible = ref(false);
+        const submittingContract = ref(false);
+        const newContractForm = ref({
+          contract_id: '',
+          title: '',
+          service_name: 'tpm-backend-app',
+          contract_type: 'OpenAPI',
+          category: 'api',
+          version: '1.0.0',
+          endpoint_or_path: '',
+          owner: '集中采购架构组',
+          change_policy: 'independent_pr_required',
+          is_breaking_frozen: false,
+          schema_content: '',
+          description: ''
+        });
+
+        const openNewContractModal = () => {
+          newContractForm.value = {
+            contract_id: 'CTR-TPM-EXT-' + Math.floor(100 + Math.random() * 900),
+            title: '',
+            service_name: 'tpm-backend-app',
+            contract_type: 'OpenAPI',
+            category: 'api',
+            version: '1.0.0',
+            endpoint_or_path: '/api/',
+            owner: '集中采购架构组',
+            change_policy: 'independent_pr_required',
+            is_breaking_frozen: false,
+            schema_content: `openapi: 3.0.3\ninfo:\n  title: 新建业务接口契约\n  version: 1.0.0\npaths:\n  /api/example:\n    post:\n      summary: 业务执行接口\n      responses:\n        '200':\n          description: 执行成功`,
+            description: '规范业务交互语义，卡点异常破坏性变更。'
+          };
+          newContractModalVisible.value = true;
+        };
+
+        const fillExampleSchema = () => {
+          if (newContractForm.value.contract_type === 'JSONSchema') {
+            newContractForm.value.schema_content = JSON.stringify({
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "title": "BusinessDataSchema",
+              "type": "object",
+              "required": ["id", "status"],
+              "properties": {
+                "id": { "type": "integer" },
+                "status": { "type": "string", "enum": ["ACTIVE", "FROZEN"] }
+              }
+            }, null, 2);
+          } else if (newContractForm.value.contract_type === 'JavaDTO') {
+            newContractForm.value.schema_content = `package com.tpm.dto;\n\nimport lombok.Data;\nimport java.io.Serializable;\n\n@Data\npublic class BusinessRequestDTO implements Serializable {\n    private Long orderId;\n    private String actionCode;\n}`;
+          } else {
+            newContractForm.value.schema_content = `openapi: 3.0.3\ninfo:\n  title: 业务接口契约规范\n  version: 1.0.0\npaths:\n  /api/v1/business:\n    post:\n      summary: 执行业务\n      responses:\n        '200':\n          description: 成功`;
+          }
+        };
+
+        const submitNewContract = async () => {
+          if (!newContractForm.value.contract_id.trim() || !newContractForm.value.title.trim() || !newContractForm.value.schema_content.trim()) {
+            showToast('表单校验未通过', '契约编号、标题和Schema规范内容不能为空', 'warning');
+            return;
+          }
+          submittingContract.value = true;
+          try {
+            const resp = await fetch('/api/v1/contracts', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+              body: JSON.stringify(newContractForm.value)
+            });
+            const data = await resp.json();
+            if (resp.status === 201 || resp.ok) {
+              showToast('契约录入成功', `已成功建立契约 [${data.contract_id}] 并生成 Revision #1 快照`, 'success');
+              newContractModalVisible.value = false;
+              await fetchContractStats();
+              await loadData();
+              await fetchStats();
+            } else {
+              showToast('录入失败', data.detail || data.message || '录入契约异常', 'error');
+            }
+          } catch (e) {
+            showToast('网络错误', e.message || '提交新建契约异常', 'error');
+          } finally {
+            submittingContract.value = false;
+          }
+        };
+
+        const copyContractSpec = (row) => {
+          const content = row.schema_content || row.schema_snapshot || row.contract_id || '';
+          if (navigator.clipboard) {
+            navigator.clipboard.writeText(content).then(() => {
+              showToast('已复制到剪贴板', '契约Schema规范文本已成功复制', 'success');
+            });
+          }
         };
 
         const openApiKeyModal = () => {
@@ -5141,6 +5894,7 @@
         const filterGithubState = ref('');
         const filterGithubRepo = ref('');
         const filterGithubSecurity = ref(false);
+        const githubSyncing = ref(false);
         const githubBarChartEl = ref(null);
         const githubPieChartEl = ref(null);
         let githubBarChartInstance = null;
@@ -5355,7 +6109,68 @@
             ]
           },
 
-          // 4. 规约管理 (数据量: 319)
+          // 4. 编码契约与仲裁 (契约中心)
+          {
+            id: 'contracts',
+            label: '编码契约与仲裁',
+            icon: 'fa-solid fa-file-contract',
+            statKey: 'contracts_total',
+            subTabs: [
+              {
+                name: '契约规则库',
+                endpoint: '/api/v1/contracts',
+                searchPlaceholder: '搜索契约编号(CTR-ID)、接口定义、服务模块、负责人...',
+                columns: [
+                  { key: 'contract_id', label: '契约编号', cellClass: 'font-mono font-bold text-indigo-400 whitespace-nowrap' },
+                  { key: 'title', label: '契约定义说明', cellClass: 'font-semibold text-white whitespace-nowrap' },
+                  { key: 'version', label: '当前版本', cellClass: 'font-mono text-amber-400 font-bold whitespace-nowrap' },
+                  { key: 'category', label: '契约大类', type: 'badge' },
+                  { key: 'contract_type', label: '规范格式', type: 'badge' },
+                  { key: 'service_name', label: '所属服务', cellClass: 'text-indigo-300 font-mono whitespace-nowrap' },
+                  { key: 'endpoint_or_path', label: '接口端点 / 代码路径', truncate: true, cellClass: 'font-mono text-xs text-slate-300' },
+                  { key: 'is_breaking_frozen', label: '破坏性冻结', type: 'bool' },
+                  { key: 'consumers_count', label: '消费端数', cellClass: 'font-mono text-emerald-400 font-bold whitespace-nowrap' },
+                  { key: 'change_policy', label: '变更策略', type: 'badge' },
+                  { key: 'owner', label: '责任方', cellClass: 'text-slate-300 whitespace-nowrap' },
+                  { key: 'status', label: '状态', type: 'badge' },
+                  { key: 'created_at', label: '创建时间', cellClass: 'font-mono text-slate-400 whitespace-nowrap' }
+                ]
+              },
+              {
+                name: '契约修订演进流水线',
+                endpoint: '/api/v1/contracts/revisions',
+                searchPlaceholder: '搜索契约编号、变更说明、PR编号、Git Commit...',
+                columns: [
+                  { key: 'contract_id', label: '契约编号', cellClass: 'font-mono font-bold text-indigo-400 whitespace-nowrap' },
+                  { key: 'revision_no', label: '修订编号', cellClass: 'font-mono text-amber-400 font-semibold whitespace-nowrap' },
+                  { key: 'version', label: '目标版本', cellClass: 'font-mono text-emerald-400 font-bold whitespace-nowrap' },
+                  { key: 'change_type', label: '变更级别', type: 'badge' },
+                  { key: 'change_summary', label: '变更审计说明', truncate: true, cellClass: 'text-white' },
+                  { key: 'pr_reference', label: '独立PR凭据', cellClass: 'font-mono text-indigo-300 whitespace-nowrap' },
+                  { key: 'git_commit', label: 'Git Commit', cellClass: 'font-mono text-slate-400 whitespace-nowrap' },
+                  { key: 'approved_by', label: '审批人', cellClass: 'text-slate-300 whitespace-nowrap' },
+                  { key: 'created_at', label: '归档时间', cellClass: 'font-mono text-slate-400 whitespace-nowrap' }
+                ]
+              },
+              {
+                name: '消费端依赖拓扑',
+                endpoint: '/api/v1/contracts/consumers',
+                searchPlaceholder: '搜索目标契约、消费端组件、所属代码仓、测试用例...',
+                columns: [
+                  { key: 'contract_id', label: '目标契约', cellClass: 'font-mono font-bold text-indigo-400 whitespace-nowrap' },
+                  { key: 'consumer_type', label: '消费类型', type: 'badge' },
+                  { key: 'consumer_name', label: '消费端组件/服务', cellClass: 'font-bold text-white whitespace-nowrap' },
+                  { key: 'consumer_repo', label: '所属仓库', type: 'badge' },
+                  { key: 'consumer_path', label: '源码文件路径', truncate: true, cellClass: 'font-mono text-xs text-slate-300' },
+                  { key: 'binding_status', label: '对齐状态', type: 'badge' },
+                  { key: 'test_suite_ref', label: '契约测试套件', truncate: true, cellClass: 'font-mono text-xs text-indigo-300' },
+                  { key: 'last_verified_at', label: '最新核验', cellClass: 'font-mono text-slate-400 whitespace-nowrap' }
+                ]
+              }
+            ]
+          },
+
+          // 5. 规约管理 (数据量: 319)
           {
             id: 'rules',
             label: '规约管理',
@@ -5765,7 +6580,8 @@
               bitcoin_total: data.bitcoin?.mining_runs || 0,
               qcc_bids_total: data.qcc_bids?.total_bids || 0,
               frontier_tech_total: data.frontier_tech?.total_posts || 0,
-              frontier_tech_translated: data.frontier_tech?.translated_posts || 0
+              frontier_tech_translated: data.frontier_tech?.translated_posts || 0,
+              contracts_total: data.contracts?.total_contracts || 0
             };
           } catch (err) {
             console.error('Failed fetching stats:', err);
@@ -5848,7 +6664,22 @@
               }
             }
 
-            const resp = await fetch(url.toString());
+            // 针对编码契约与架构仲裁专属筛选
+            if (currentMenuId.value === 'contracts') {
+              if (filterContractService.value) {
+                url.searchParams.set('service_name', filterContractService.value);
+              }
+              if (filterContractType.value) {
+                url.searchParams.set('contract_type', filterContractType.value);
+              }
+              if (filterContractFrozen.value !== '') {
+                url.searchParams.set('is_breaking_frozen', filterContractFrozen.value);
+              }
+            }
+
+            const resp = await fetch(url.toString(), {
+              headers: getAuthHeaders()
+            });
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
 
@@ -5886,6 +6717,10 @@
             });
           } else if (menuId === 'jobs') {
             fetchJobCompanies();
+          } else if (menuId === 'contracts') {
+            nextTick(() => {
+              fetchContractStats();
+            });
           }
         };
 
@@ -8135,6 +8970,38 @@
           showToast('筛选已清空', '已恢复展示全部开源治理记录', 'info', 2000);
         };
 
+        const syncGithubPrs = async () => {
+          if (githubSyncing.value) return;
+          githubSyncing.value = true;
+          showToast('同步中', '正在通过 GitHub CLI 获取最新 PR 生命周期与贡献状态...', 'info', 4000);
+          try {
+            const res = await fetch('/api/v1/extensions/github-prs/sync', {
+              method: 'POST',
+              headers: getAuthHeaders()
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+              const d = data.data || {};
+              showToast(
+                '同步成功',
+                `GitHub 数据已更新！PR 总数: ${d.total_fetched || 0}，更新状态: ${d.updated_lifecycle || 0}，新增: ${d.inserted_lifecycle || 0}，贡献更新: ${d.updated_contributions || 0}`,
+                'success',
+                6000
+              );
+              await fetchGithubStats();
+              await loadData();
+              await fetchStats();
+            } else {
+              showToast('同步失败', data.detail || data.message || '网络或 GitHub API 错误', 'error', 5000);
+            }
+          } catch (err) {
+            console.error('Failed to sync github PRs:', err);
+            showToast('同步异常', String(err.message || err), 'error', 5000);
+          } finally {
+            githubSyncing.value = false;
+          }
+        };
+
         const renderGithubBarChart = () => {
           if (!githubBarChartEl.value || typeof echarts === 'undefined') return;
           githubBarChartInstance = getOrInitChart(githubBarChartInstance, githubBarChartEl.value);
@@ -8843,6 +9710,7 @@
         // 详情弹窗标题与副标题安全解析
         const detailTitle = computed(() => {
           const r = detailRow.value || {};
+          if (r.contract_id) return '编码契约规范 · ' + r.contract_id + ' (v' + (r.version || '1.0.0') + ')';
           if (r.person_name) return '人才公示 · ' + r.person_name;
           if (r.position_title) return '岗位详情 · ' + r.position_title;
           if (r.author_username === 'trq212' || r.tweet_id) return '前沿技术推文 · @' + (r.author_username || 'trq212');
@@ -8851,6 +9719,9 @@
 
         const detailSubtitle = computed(() => {
           const r = detailRow.value || {};
+          if (r.contract_id) {
+            return (r.title || '') + ' · 模块: ' + (r.service_name || '-') + ' · 责任架构方: ' + (r.owner || '架构组');
+          }
           if (r.person_name) {
             return (r.work_unit || '') + (r.accept_dept ? ' · ' + r.accept_dept : '');
           }
@@ -9115,7 +9986,31 @@
           toggleGithubChartCollapse,
           filterByGithubRepo,
           filterByGithubState,
-          clearGithubFilters
+          clearGithubFilters,
+          githubSyncing,
+          syncGithubPrs,
+          contractStats,
+          filterContractService,
+          filterContractType,
+          filterContractFrozen,
+          toggleContractFrozenFilter,
+          clearContractFilters,
+          fetchContractStats,
+          verifyModalVisible,
+          verifyingSchema,
+          verifyType,
+          verifyContent,
+          verifyResult,
+          openVerifySchemaModal,
+          openVerifyWithCurrentContract,
+          runVerifySchema,
+          newContractModalVisible,
+          submittingContract,
+          newContractForm,
+          openNewContractModal,
+          fillExampleSchema,
+          submitNewContract,
+          copyContractSpec
         };
       }
     }).mount('#app');

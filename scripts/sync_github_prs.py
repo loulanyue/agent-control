@@ -16,6 +16,22 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db.session import SessionLocal
 from app.models.extensions import GithubPrLifecycle, GithubContribution
 
+import shutil
+
+# Ensure standard binary search paths are available in environment
+for extra_p in ["/opt/homebrew/bin", "/usr/local/bin", os.path.expanduser("~/.local/bin")]:
+    if extra_p not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = f"{extra_p}:{os.environ.get('PATH', '')}"
+
+def get_gh_bin() -> str:
+    found = shutil.which("gh")
+    if found:
+        return found
+    for fallback in ["/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh"]:
+        if os.path.isfile(fallback) and os.access(fallback, os.X_OK):
+            return fallback
+    return "gh"
+
 def parse_iso_dt(dt_str: Optional[str]) -> Optional[datetime]:
     if not dt_str or dt_str.startswith("0001-01-01"):
         return None
@@ -43,14 +59,15 @@ def extract_pr_urls(text: Optional[str]):
     return matches
 
 def sync_github_prs_data():
-    print("Fetching PRs from GitHub CLI (author: loulanyue)...")
+    gh_bin = get_gh_bin()
+    print(f"Fetching PRs from GitHub CLI (bin: {gh_bin}, author: loulanyue)...")
     cmd = [
-        "gh", "search", "prs",
+        gh_bin, "search", "prs",
         "--author", "loulanyue",
         "--limit", "600",
         "--json", "number,repository,state,title,url,createdAt,updatedAt,closedAt"
     ]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True, env=os.environ)
     if res.returncode != 0:
         raise RuntimeError(f"gh search failed: {res.stderr}")
     
@@ -58,17 +75,39 @@ def sync_github_prs_data():
     print(f"Successfully fetched {len(items)} PRs from GitHub.")
     
     gh_map: Dict[str, Any] = {}
+    self_pr_count = 0
     for item in items:
-        gh_map[item["url"]] = item
+        repo_info = item.get("repository", {})
+        name_with_owner = repo_info.get("nameWithOwner", "")
+        owner = name_with_owner.split("/")[0].lower() if "/" in name_with_owner else ""
+        url = item.get("url", "")
+        # 严格剔除自身项目的 PR (如 loulanyue/interview-notes, loulanyue/spec-kit-zh 等)
+        if owner == "loulanyue" or url.startswith("https://github.com/loulanyue/"):
+            self_pr_count += 1
+            continue
+        gh_map[url] = item
+
+    print(f"Total fetched: {len(items)}, Filtered out self-owned: {self_pr_count}, External PRs: {len(gh_map)}")
 
     db = SessionLocal()
     try:
         now = datetime.utcnow()
+        # 彻底清理数据库中属于自身项目的 PR 与开源贡献记录
+        deleted_prs = db.query(GithubPrLifecycle).filter(
+            (GithubPrLifecycle.repo_owner == "loulanyue") | (GithubPrLifecycle.pr_url.like("https://github.com/loulanyue/%"))
+        ).delete(synchronize_session=False)
+
+        deleted_contribs = db.query(GithubContribution).filter(
+            (GithubContribution.repo_owner == "loulanyue") | (GithubContribution.pr_url.like("https://github.com/loulanyue/%"))
+        ).delete(synchronize_session=False)
+        if deleted_prs or deleted_contribs:
+            print(f"Purged self-owned records from DB: {deleted_prs} PRs, {deleted_contribs} contributions.")
+
         updated_lifecycle_count = 0
         inserted_lifecycle_count = 0
         updated_contrib_count = 0
         
-        # 1. Update / Insert GithubPrLifecycle
+        # 1. Update / Insert GithubPrLifecycle (仅外部项目)
         db_prs = db.query(GithubPrLifecycle).all()
         existing_prs_by_url = {p.pr_url: p for p in db_prs}
         
@@ -150,8 +189,8 @@ def sync_github_prs_data():
                 # Try gh pr view
                 try:
                     p_res = subprocess.run(
-                        ["gh", "pr", "view", single_url, "--json", "state,closedAt,mergedAt"],
-                        capture_output=True, text=True, timeout=10
+                        [gh_bin, "pr", "view", single_url, "--json", "state,closedAt,mergedAt"],
+                        capture_output=True, text=True, timeout=10, env=os.environ
                     )
                     if p_res.returncode == 0:
                         single_data = json.loads(p_res.stdout)
@@ -188,6 +227,9 @@ def sync_github_prs_data():
         print(f"GithubContribution updated: {updated_contrib_count}")
         return {
             "total_fetched": len(items),
+            "external_prs": len(gh_map),
+            "purged_self_prs": deleted_prs,
+            "purged_self_contribs": deleted_contribs,
             "updated_lifecycle": updated_lifecycle_count,
             "inserted_lifecycle": inserted_lifecycle_count,
             "updated_contributions": updated_contrib_count

@@ -56,6 +56,9 @@ logs/
 *.sqlite3
 *.db
 *.pkl
+backups/
+*.sql
+*.sql.gz
 
 # Node / Frontend dependencies
 node_modules/
