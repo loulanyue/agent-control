@@ -1286,6 +1286,7 @@ def list_github_contributions(
     keyword: Optional[str] = Query(None, description="仓库/标题/结论关键词"),
     status: Optional[str] = Query(None, description="状态: OPEN / MERGED / CLOSED"),
     is_security: Optional[int] = Query(None, description="是否安全漏洞: 0/1"),
+    repo_name: Optional[str] = Query(None, description="仓库名称精确过滤"),
     db: Session = Depends(get_db)
 ):
     query = db.query(GithubContribution)
@@ -1293,6 +1294,8 @@ def list_github_contributions(
         query = query.filter(GithubContribution.status == status.strip())
     if isinstance(is_security, int):
         query = query.filter(GithubContribution.is_security == is_security)
+    if isinstance(repo_name, str) and repo_name.strip():
+        query = query.filter(GithubContribution.repo_name == repo_name.strip())
     if isinstance(keyword, str) and keyword.strip():
         kw = f"%{keyword.strip()}%"
         query = query.filter(
@@ -1334,11 +1337,14 @@ def list_github_prs(
     page_size: int = Query(20, ge=1, le=100),
     keyword: Optional[str] = Query(None),
     state: Optional[str] = Query(None),
+    repo_name: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     query = db.query(GithubPrLifecycle)
     if isinstance(state, str) and state.strip():
         query = query.filter(GithubPrLifecycle.state == state.strip())
+    if isinstance(repo_name, str) and repo_name.strip():
+        query = query.filter(GithubPrLifecycle.repo_name == repo_name.strip())
     if isinstance(keyword, str) and keyword.strip():
         kw = f"%{keyword.strip()}%"
         query = query.filter(
@@ -1370,6 +1376,135 @@ def list_github_prs(
         }
 
     return paginate_query(query, page if isinstance(page, int) else 1, page_size if isinstance(page_size, int) else 20, serialize)
+
+@router.get("/github/stats")
+def get_github_stats(
+    limit: int = Query(15, ge=5, le=50, description="返回前N个重点项目"),
+    sort_by: Optional[str] = Query("total", description="排序维度: total(总数), merged(已合并优先), open(开放中优先)"),
+    db: Session = Depends(get_db)
+):
+    """
+    GitHub 开源治理多维统计：
+    1. 汇总概览: 项目总数、PR总数、合并数、开放数、关闭数、合并转化率、CVE/安全贡献数
+    2. PR 状态视角: MERGED / OPEN / CLOSED 分布与占比
+    3. 项目/仓库视角: Top N 仓库在各 PR 状态下的明细数据与排行榜
+    4. 贡献与安全视角: Top N 贡献仓库与安全修复分布
+    """
+    from sqlalchemy import func, case
+
+    # 1. PR 生命周期全局概览
+    total_prs = db.query(func.count(GithubPrLifecycle.id)).scalar() or 0
+    merged_prs = db.query(func.count(GithubPrLifecycle.id)).filter(GithubPrLifecycle.state == "MERGED").scalar() or 0
+    open_prs = db.query(func.count(GithubPrLifecycle.id)).filter(GithubPrLifecycle.state == "OPEN").scalar() or 0
+    closed_prs = db.query(func.count(GithubPrLifecycle.id)).filter(GithubPrLifecycle.state == "CLOSED").scalar() or 0
+    total_repos = db.query(func.count(func.distinct(GithubPrLifecycle.repo_name))).scalar() or 0
+    merge_rate = round((merged_prs / total_prs * 100), 1) if total_prs > 0 else 0.0
+
+    # 2. 开源贡献表全局概览
+    total_contribs = db.query(func.count(GithubContribution.id)).scalar() or 0
+    security_contribs = db.query(func.count(GithubContribution.id)).filter(GithubContribution.is_security == 1).scalar() or 0
+    contrib_repos = db.query(func.count(func.distinct(GithubContribution.repo_name))).scalar() or 0
+    contrib_open = db.query(func.count(GithubContribution.id)).filter(GithubContribution.status == "OPEN").scalar() or 0
+    contrib_closed = db.query(func.count(GithubContribution.id)).filter(GithubContribution.status == "CLOSED").scalar() or 0
+    contrib_merged = db.query(func.count(GithubContribution.id)).filter(GithubContribution.status == "MERGED").scalar() or 0
+
+    # 3. 按仓库聚合 PR 状态分布
+    repo_rows = db.query(
+        GithubPrLifecycle.repo_name,
+        func.count(GithubPrLifecycle.id).label("total"),
+        func.sum(case((GithubPrLifecycle.state == "MERGED", 1), else_=0)).label("merged"),
+        func.sum(case((GithubPrLifecycle.state == "OPEN", 1), else_=0)).label("open"),
+        func.sum(case((GithubPrLifecycle.state == "CLOSED", 1), else_=0)).label("closed")
+    ).group_by(GithubPrLifecycle.repo_name).all()
+
+    repo_list = []
+    for r in repo_rows:
+        tot = int(r.total or 0)
+        m = int(r.merged or 0)
+        o = int(r.open or 0)
+        c = int(r.closed or 0)
+        rate = round(m / tot * 100, 1) if tot > 0 else 0.0
+        repo_list.append({
+            "repo_name": r.repo_name,
+            "total": tot,
+            "merged": m,
+            "open": o,
+            "closed": c,
+            "merge_rate": rate
+        })
+
+    # 根据 sort_by 排序
+    if sort_by == "merged":
+        sorted_repos = sorted(repo_list, key=lambda x: (x["merged"], x["total"]), reverse=True)
+    elif sort_by == "open":
+        sorted_repos = sorted(repo_list, key=lambda x: (x["open"], x["total"]), reverse=True)
+    elif sort_by == "closed":
+        sorted_repos = sorted(repo_list, key=lambda x: (x["closed"], x["total"]), reverse=True)
+    else:  # "total"
+        sorted_repos = sorted(repo_list, key=lambda x: (x["total"], x["merged"]), reverse=True)
+
+    top_repos = sorted_repos[:limit]
+
+    # 4. PR 状态分布明细
+    pr_states = [
+        {"name": "已合并 (MERGED)", "state": "MERGED", "count": merged_prs, "percentage": merge_rate, "color": "#10b981"},
+        {"name": "开放推进中 (OPEN)", "state": "OPEN", "count": open_prs, "percentage": round(open_prs / total_prs * 100, 1) if total_prs > 0 else 0.0, "color": "#38bdf8"},
+        {"name": "已关闭 (CLOSED)", "state": "CLOSED", "count": closed_prs, "percentage": round(closed_prs / total_prs * 100, 1) if total_prs > 0 else 0.0, "color": "#64748b"}
+    ]
+
+    # 5. 开源贡献 Top 仓库
+    contrib_repo_rows = db.query(
+        GithubContribution.repo_name,
+        func.count(GithubContribution.id).label("total"),
+        func.sum(case((GithubContribution.is_security == 1, 1), else_=0)).label("security_count")
+    ).group_by(GithubContribution.repo_name).order_by(func.count(GithubContribution.id).desc()).limit(limit).all()
+
+    top_contrib_repos = [
+        {
+            "repo_name": cr[0],
+            "total": int(cr[1] or 0),
+            "security_count": int(cr[2] or 0)
+        }
+        for cr in contrib_repo_rows
+    ]
+
+    return {
+        "summary": {
+            "total_prs": total_prs,
+            "total_repos": total_repos,
+            "merged_prs": merged_prs,
+            "open_prs": open_prs,
+            "closed_prs": closed_prs,
+            "merge_rate": merge_rate,
+            "total_contributions": total_contribs,
+            "security_contributions": security_contribs,
+            "contrib_repos": contrib_repos,
+            "contrib_open": contrib_open,
+            "contrib_closed": contrib_closed,
+            "contrib_merged": contrib_merged
+        },
+        "pr_states": pr_states,
+        "top_repos": top_repos,
+        "top_contrib_repos": top_contrib_repos
+    }
+
+@router.post("/github-prs/sync")
+def sync_github_prs_endpoint():
+    """
+    通过 GitHub CLI (gh) 实时拉取并同步 loulanyue 的全部 PR 状态。
+    更新 github_prs_lifecycle 与 github_contributions。
+    """
+    from scripts.sync_github_prs import sync_github_prs_data
+    try:
+        res = sync_github_prs_data()
+        return {
+            "success": True,
+            "message": "GitHub PR 状态同步完成",
+            "data": res
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ----------------------------------------------------------------------
 # 3. 技术与能力画像 (Technical & Capability Profiling)

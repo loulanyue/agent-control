@@ -724,6 +724,99 @@
           </button>
         </div>
 
+        <!-- GitHub 开源治理专属筛选栏 (支持按项目/仓库、PR状态、安全CVE、综合关键词搜索) -->
+        <div v-else-if="currentMenuId === 'github'" class="flex flex-wrap items-center gap-2.5 flex-1 min-w-[320px]">
+          <!-- 1. 状态筛选下拉框 -->
+          <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+            <i class="fa-solid fa-code-pull-request text-indigo-400"></i>
+            <span class="text-slate-400 text-[11px] select-none">状态:</span>
+            <select
+              v-model="filterGithubState"
+              @change="handleSearch"
+              class="bg-transparent text-slate-200 focus:outline-none cursor-pointer">
+              <option value="">全部状态</option>
+              <option value="MERGED">MERGED (已合并)</option>
+              <option value="OPEN">OPEN (开放推进中)</option>
+              <option value="CLOSED">CLOSED (已关闭)</option>
+            </select>
+            <button
+              v-if="filterGithubState"
+              @click="filterGithubState = ''; handleSearch()"
+              class="text-slate-400 hover:text-slate-200 text-xs ml-1">
+              <i class="fa-solid fa-circle-xmark"></i>
+            </button>
+          </div>
+
+          <!-- 2. 重点项目/仓库筛选 -->
+          <div class="relative min-w-[150px] max-w-[200px]">
+            <i class="fa-brands fa-github absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+            <input
+              type="text"
+              v-model="filterGithubRepo"
+              @keyup.enter="handleSearch"
+              placeholder="项目仓库 (如: dify)..."
+              class="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition">
+            <button
+              v-if="filterGithubRepo"
+              @click="filterGithubRepo = ''; handleSearch()"
+              class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 text-xs">
+              <i class="fa-solid fa-circle-xmark"></i>
+            </button>
+          </div>
+
+          <!-- 3. 快捷状态标签 -->
+          <div class="hidden xl:flex items-center gap-1">
+            <button
+              v-for="st in [
+                { label: '全部', val: '' },
+                { label: '已合并', val: 'MERGED', badge: '103' },
+                { label: '开放中', val: 'OPEN', badge: '150' },
+                { label: '已关闭', val: 'CLOSED', badge: '224' }
+              ]"
+              :key="st.val"
+              @click="filterGithubState = st.val; handleSearch()"
+              :class="filterGithubState === st.val ? 'bg-indigo-600 text-white border-indigo-500 font-bold shadow-sm' : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 border-slate-700'"
+              class="px-2 py-1 rounded text-[11px] border transition inline-flex items-center gap-1 font-mono">
+              <span>[[ st.label ]]</span>
+              <span v-if="st.badge" class="px-1 py-0.2 rounded text-[10px] bg-slate-700/80 text-slate-300 font-mono">[[ st.badge ]]</span>
+            </button>
+            <button
+              v-if="currentSubTab.endpoint === '/api/v1/extensions/github-contributions'"
+              @click="filterGithubSecurity = !filterGithubSecurity; handleSearch()"
+              :class="filterGithubSecurity ? 'bg-amber-600 text-white border-amber-500 font-bold shadow-sm' : 'bg-slate-800 text-amber-400/80 hover:text-amber-300 hover:bg-slate-700 border-amber-500/30'"
+              class="px-2 py-1 rounded text-[11px] border transition inline-flex items-center gap-1 font-mono ml-0.5"
+              title="仅筛选标有安全漏洞编号(GHSA)的贡献">
+              <i class="fa-solid fa-shield-halved text-amber-400 text-xs"></i>
+              <span>安全漏洞/CVE</span>
+              <span class="px-1 py-0.2 rounded text-[10px] bg-amber-500/20 text-amber-200 font-mono font-bold">5条</span>
+            </button>
+          </div>
+
+          <!-- 4. 综合搜索框 -->
+          <div class="relative min-w-[180px] flex-1">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+            <input
+              type="text"
+              v-model="searchKeyword"
+              @keyup.enter="handleSearch"
+              placeholder="搜索仓库、PR标题、分支、结论..."
+              class="w-full pl-8 pr-4 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+          </div>
+
+          <!-- 操作按钮 -->
+          <button
+            @click="handleSearch"
+            class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium flex-shrink-0 transition shadow-sm">
+            查询
+          </button>
+          <button
+            v-if="searchKeyword || filterGithubState || filterGithubRepo || filterGithubSecurity"
+            @click="clearGithubFilters"
+            class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs flex-shrink-0 transition border border-slate-700">
+            重置
+          </button>
+        </div>
+
         <!-- 通用搜索栏 (其他业务模块) -->
         <div v-else class="flex items-center space-x-3 flex-1 min-w-[280px] max-w-xl">
           <div class="relative w-full">
@@ -2286,6 +2379,253 @@
                       <div class="font-bold text-white mt-0.5">柳磊 & 娄春情</div>
                       <div class="text-[10px] text-purple-400 font-mono mt-0.5">D-市级领军人才</div>
                     </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- GitHub 开源治理与 PR 生命周期多维可视化看板 (项目/PR状态多维透视) -->
+        <div
+          v-if="currentMenuId === 'github'"
+          class="mb-4 bg-slate-900/70 border border-slate-800/90 rounded-xl overflow-hidden shadow-xl backdrop-blur">
+          
+          <!-- 看板 Header 与操作栏 -->
+          <div class="px-4 py-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-850/60">
+            <div class="flex items-center space-x-3">
+              <!-- 看板主 Tab 切换: PR 状态与项目透视 vs 开源贡献与 CVE 透视 -->
+              <div class="flex bg-slate-950 p-1 rounded-lg border border-slate-700/80 shadow-inner">
+                <button
+                  @click="switchGithubActiveTab('prs')"
+                  :class="githubActiveTab === 'prs' ? 'bg-indigo-600 text-white font-semibold shadow-md' : 'text-slate-400 hover:text-white'"
+                  class="px-3 py-1 rounded-md text-xs transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-code-pull-request text-[11px]"></i>
+                  <span>PR 状态与项目透视</span>
+                  <span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-1 py-0.2 rounded font-mono font-bold border border-emerald-500/30">477 PRs</span>
+                </button>
+                <button
+                  @click="switchGithubActiveTab('contribs')"
+                  :class="githubActiveTab === 'contribs' ? 'bg-indigo-600 text-white font-semibold shadow-md' : 'text-slate-400 hover:text-white'"
+                  class="px-3 py-1 rounded-md text-xs transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-shield-halved text-[11px] text-amber-400"></i>
+                  <span>开源贡献与 CVE 透视</span>
+                  <span class="text-[9px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-mono font-bold border border-amber-500/30">5 GHSA</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 右侧控制区: Top N / 排序维度 / 收起展开 -->
+            <div class="flex items-center flex-wrap gap-2 text-xs">
+              <!-- Top N 切换 -->
+              <div class="flex bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-[11px]">
+                <button
+                  v-for="n in [10, 15, 25, 50]"
+                  :key="n"
+                  @click="changeGithubTopN(n)"
+                  :class="githubTopN === n ? 'bg-indigo-600 text-white font-semibold shadow' : 'text-slate-400 hover:text-white'"
+                  class="px-2 py-0.5 rounded transition">
+                  Top [[ n ]]
+                </button>
+              </div>
+
+              <!-- 排序维度切换 (仅 PR 透视) -->
+              <div v-if="githubActiveTab === 'prs'" class="flex bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-[11px]">
+                <button
+                  @click="changeGithubSortBy('total')"
+                  :class="githubSortBy === 'total' ? 'bg-indigo-600 text-white font-semibold shadow' : 'text-slate-400 hover:text-white'"
+                  class="px-2 py-0.5 rounded transition"
+                  title="按 PR 总数排序">
+                  总数
+                </button>
+                <button
+                  @click="changeGithubSortBy('merged')"
+                  :class="githubSortBy === 'merged' ? 'bg-emerald-600 text-white font-semibold shadow' : 'text-slate-400 hover:text-white'"
+                  class="px-2 py-0.5 rounded transition"
+                  title="已合并优先">
+                  已合并
+                </button>
+                <button
+                  @click="changeGithubSortBy('open')"
+                  :class="githubSortBy === 'open' ? 'bg-sky-600 text-white font-semibold shadow' : 'text-slate-400 hover:text-white'"
+                  class="px-2 py-0.5 rounded transition"
+                  title="开放中优先">
+                  开放中
+                </button>
+              </div>
+
+              <!-- 收起/展开图表 -->
+              <button
+                @click="toggleGithubChartCollapse"
+                class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition flex items-center gap-1">
+                <i :class="githubChartCollapsed ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-up'"></i>
+                [[ githubChartCollapsed ? '展开图表' : '收起图表' ]]
+              </button>
+            </div>
+          </div>
+
+          <!-- KPI 指标概览条 -->
+          <div class="px-4 py-2.5 bg-slate-950/40 border-b border-slate-800/80 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+            <!-- 1. 覆盖开源项目 -->
+            <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-center justify-between">
+              <span class="text-slate-400 text-[11px]">覆盖开源项目</span>
+              <span class="font-bold text-white font-mono text-sm">[[ formatNumber(githubStats.summary.total_repos || 0) ]]</span>
+            </div>
+
+            <!-- 2. PR 记录总计 -->
+            <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-center justify-between">
+              <span class="text-slate-400 text-[11px]">PR 治理总计</span>
+              <span class="font-bold text-indigo-400 font-mono text-sm">[[ formatNumber(githubStats.summary.total_prs || 0) ]]</span>
+            </div>
+
+            <!-- 3. 已成功合并 (MERGED) -->
+            <div
+              @click="filterByGithubState('MERGED')"
+              class="bg-emerald-500/5 p-2 rounded-lg border border-emerald-500/20 flex items-center justify-between cursor-pointer hover:bg-emerald-500/10 transition"
+              title="点击快速筛选 MERGED 已合并记录">
+              <span class="text-emerald-400 text-[11px] font-semibold flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                已合并 (MERGED)
+              </span>
+              <div class="text-right">
+                <span class="font-bold text-emerald-400 font-mono text-sm">[[ formatNumber(githubStats.summary.merged_prs || 0) ]]</span>
+                <span class="text-[10px] text-emerald-400/70 font-mono ml-1">([[ githubStats.summary.merge_rate || 0 ]]%)</span>
+              </div>
+            </div>
+
+            <!-- 4. 开放推进中 (OPEN) -->
+            <div
+              @click="filterByGithubState('OPEN')"
+              class="bg-sky-500/5 p-2 rounded-lg border border-sky-500/20 flex items-center justify-between cursor-pointer hover:bg-sky-500/10 transition"
+              title="点击快速筛选 OPEN 开放中记录">
+              <span class="text-sky-400 text-[11px] font-semibold flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+                开放中 (OPEN)
+              </span>
+              <span class="font-bold text-sky-400 font-mono text-sm">[[ formatNumber(githubStats.summary.open_prs || 0) ]]</span>
+            </div>
+
+            <!-- 5. 已关闭 (CLOSED) -->
+            <div
+              @click="filterByGithubState('CLOSED')"
+              class="bg-slate-700/20 p-2 rounded-lg border border-slate-700/40 flex items-center justify-between cursor-pointer hover:bg-slate-700/30 transition"
+              title="点击快速筛选 CLOSED 已关闭记录">
+              <span class="text-slate-400 text-[11px] font-semibold flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                已关闭 (CLOSED)
+              </span>
+              <span class="font-bold text-slate-300 font-mono text-sm">[[ formatNumber(githubStats.summary.closed_prs || 0) ]]</span>
+            </div>
+
+            <!-- 6. 开源贡献 / 安全修复 -->
+            <div
+              @click="switchGithubActiveTab('contribs')"
+              class="bg-amber-500/5 p-2 rounded-lg border border-amber-500/20 flex items-center justify-between cursor-pointer hover:bg-amber-500/10 transition"
+              title="点击切换至开源贡献与CVE漏洞视角">
+              <span class="text-amber-400 text-[11px] font-semibold flex items-center gap-1">
+                <i class="fa-solid fa-shield-halved text-xs text-amber-400"></i>
+                开源贡献 / CVE
+              </span>
+              <div class="text-right">
+                <span class="font-bold text-amber-300 font-mono text-sm">[[ formatNumber(githubStats.summary.total_contributions || 0) ]]</span>
+                <span class="text-[10px] text-amber-400/80 font-mono ml-1">([[ formatNumber(githubStats.summary.security_contributions || 0) ]] CVE)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 当前已生效的高亮联动筛选指示条 -->
+          <div
+            v-if="filterGithubRepo || filterGithubState || filterGithubSecurity"
+            class="px-4 py-2 bg-indigo-950/40 border-b border-indigo-900/40 flex flex-wrap items-center gap-2 text-xs">
+            <span class="text-indigo-300 font-medium flex items-center gap-1">
+              <i class="fa-solid fa-filter text-[10px]"></i>
+              当前生效筛选:
+            </span>
+            <span
+              v-if="filterGithubRepo"
+              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-600/30 border border-indigo-500/50 text-indigo-200 font-mono text-[11px]">
+              <i class="fa-brands fa-github text-[10px]"></i>
+              项目: [[ filterGithubRepo ]]
+              <button @click="filterGithubRepo = ''; loadData();" class="hover:text-white ml-0.5"><i class="fa-solid fa-xmark"></i></button>
+            </span>
+            <span
+              v-if="filterGithubState"
+              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-600/30 border border-emerald-500/50 text-emerald-200 font-mono text-[11px]">
+              <i class="fa-solid fa-code-pull-request text-[10px]"></i>
+              状态: [[ filterGithubState ]]
+              <button @click="filterGithubState = ''; loadData();" class="hover:text-white ml-0.5"><i class="fa-solid fa-xmark"></i></button>
+            </span>
+            <span
+              v-if="filterGithubSecurity"
+              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-600/30 border border-amber-500/50 text-amber-200 font-mono text-[11px]">
+              <i class="fa-solid fa-shield-halved text-[10px]"></i>
+              仅安全漏洞(CVE)
+              <button @click="filterGithubSecurity = false; loadData();" class="hover:text-white ml-0.5"><i class="fa-solid fa-xmark"></i></button>
+            </span>
+            <button
+              @click="clearGithubFilters"
+              class="text-slate-400 hover:text-white underline text-[11px] ml-auto transition">
+              清空全部筛选
+            </button>
+          </div>
+
+          <!-- 图表主体内容区 -->
+          <div v-show="!githubChartCollapsed" class="p-4">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+              <!-- 左侧: 重点开源项目 PR/贡献 堆叠条形图 (Top N) -->
+              <div class="lg:col-span-8 bg-slate-950/40 p-4 rounded-xl border border-slate-800 flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-2">
+                  <div>
+                    <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
+                      <i class="fa-solid fa-chart-column text-indigo-400"></i>
+                      <span>[[ githubActiveTab === 'prs' ? '重点项目 PR 状态堆叠分布 (Top ' + githubTopN + ')' : '开源贡献与安全修复项目分布 (Top ' + githubTopN + ')' ]]</span>
+                    </h4>
+                    <p class="text-[11px] text-slate-400 mt-0.5">
+                      [[ githubActiveTab === 'prs' ? '绿色为已合并(MERGED)，浅蓝为开放中(OPEN)，灰色为已关闭(CLOSED) · 点击柱体联动筛选' : '深蓝为常规贡献，橙黄为安全漏洞CVE修复 · 点击柱体联动筛选' ]]
+                    </p>
+                  </div>
+                  <span class="text-[11px] font-mono text-slate-400">
+                    [[ githubActiveTab === 'prs' ? '排序: ' + (githubSortBy === 'merged' ? '已合并数' : (githubSortBy === 'open' ? '开放中' : 'PR总数')) : '按贡献总数' ]]
+                  </span>
+                </div>
+                <!-- ECharts 容器 -->
+                <div ref="githubBarChartEl" class="w-full h-80"></div>
+              </div>
+
+              <!-- 右侧: PR 状态结构与指标洞察环形图 -->
+              <div class="lg:col-span-4 bg-slate-950/40 p-4 rounded-xl border border-slate-800 flex flex-col justify-between">
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
+                      <i class="fa-solid fa-chart-pie text-emerald-400"></i>
+                      <span>[[ githubActiveTab === 'prs' ? 'PR 状态生命周期占比' : '贡献与安全属性结构' ]]</span>
+                    </h4>
+                    <span class="text-[11px] font-mono text-emerald-400 font-bold">
+                      [[ githubActiveTab === 'prs' ? '合并率 ' + (githubStats.summary.merge_rate || 0) + '%' : '5 个 CVE' ]]
+                    </span>
+                  </div>
+                  <p class="text-[11px] text-slate-400 mb-2">
+                    [[ githubActiveTab === 'prs' ? '点击扇区快速联动筛选指定生命周期状态' : '包含通用技术演进与合规安全漏洞上报' ]]
+                  </p>
+                  <!-- 环形图容器 -->
+                  <div ref="githubPieChartEl" class="w-full h-56"></div>
+                </div>
+
+                <!-- 底部高转化项目速览徽章 -->
+                <div class="mt-2 pt-2 border-t border-slate-800/80">
+                  <div class="text-[11px] font-semibold text-slate-400 mb-1 flex items-center justify-between">
+                    <span>💡 重点活跃项目速达</span>
+                    <span class="text-[10px] text-slate-500 font-normal">点击快速筛选</span>
+                  </div>
+                  <div class="flex flex-wrap gap-1.5">
+                    <button
+                      v-for="repo in (githubStats.top_repos || []).slice(0, 4)"
+                      :key="repo.repo_name"
+                      @click="filterByGithubRepo(repo.repo_name)"
+                      class="px-2 py-0.5 rounded bg-slate-900 hover:bg-indigo-600/30 border border-slate-700/80 hover:border-indigo-500/50 text-[10px] text-slate-300 hover:text-white transition font-mono flex items-center gap-1">
+                      <span>[[ repo.repo_name.length > 18 ? repo.repo_name.substring(0, 17) + '…' : repo.repo_name ]]</span>
+                      <span class="text-emerald-400 font-bold">[[ repo.total ]]</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -4774,6 +5114,38 @@
         let subsidySpouseRelationChartInstance = null;
         let subsidySpouseUnitChartInstance = null;
 
+        // GitHub 开源治理与 PR 生命周期多维统计分析状态
+        const githubStats = ref({
+          summary: {
+            total_prs: 0,
+            total_repos: 0,
+            merged_prs: 0,
+            open_prs: 0,
+            closed_prs: 0,
+            merge_rate: 0,
+            total_contributions: 0,
+            security_contributions: 0,
+            contrib_repos: 0,
+            contrib_open: 0,
+            contrib_closed: 0
+          },
+          pr_states: [],
+          top_repos: [],
+          top_contrib_repos: []
+        });
+        const githubStatsLoading = ref(false);
+        const githubChartCollapsed = ref(false);
+        const githubActiveTab = ref('prs'); // 'prs' | 'contribs'
+        const githubTopN = ref(15);
+        const githubSortBy = ref('total'); // 'total' | 'merged' | 'open'
+        const filterGithubState = ref('');
+        const filterGithubRepo = ref('');
+        const filterGithubSecurity = ref(false);
+        const githubBarChartEl = ref(null);
+        const githubPieChartEl = ref(null);
+        let githubBarChartInstance = null;
+        let githubPieChartInstance = null;
+
         // 12 大业务模块配置与数据字段映射 (按照 1.芯片半导体, 2.人才申报公示, 3.规约管理, 其余按名称排序)
         const menus = [
           // 1. 芯片半导体 (截图 1)
@@ -5455,6 +5827,27 @@
               }
             }
 
+            // 针对 GitHub 开源治理专属筛选 (状态/项目仓库/安全漏洞)
+            if (currentSubTab.value.endpoint === '/api/v1/extensions/github-prs') {
+              if (filterGithubState.value) {
+                url.searchParams.set('state', filterGithubState.value);
+              }
+              if (filterGithubRepo.value.trim()) {
+                url.searchParams.set('repo_name', filterGithubRepo.value.trim());
+              }
+            }
+            if (currentSubTab.value.endpoint === '/api/v1/extensions/github-contributions') {
+              if (filterGithubState.value) {
+                url.searchParams.set('status', filterGithubState.value);
+              }
+              if (filterGithubRepo.value.trim()) {
+                url.searchParams.set('repo_name', filterGithubRepo.value.trim());
+              }
+              if (filterGithubSecurity.value) {
+                url.searchParams.set('is_security', '1');
+              }
+            }
+
             const resp = await fetch(url.toString());
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
@@ -5486,6 +5879,10 @@
               } else if (endpoint === '/api/v1/extensions/housing-subsidy-records') {
                 fetchSubsidyStats();
               }
+            });
+          } else if (menuId === 'github') {
+            nextTick(() => {
+              fetchGithubStats();
             });
           } else if (menuId === 'jobs') {
             fetchJobCompanies();
@@ -5572,6 +5969,9 @@
           filterSpouseRelation.value = '';
           filterMatchedTalent.value = false;
           selectedCompanyFilter.value = '';
+          filterGithubState.value = '';
+          filterGithubRepo.value = '';
+          filterGithubSecurity.value = false;
 
           if (pushHistory) {
             const tabIdx = currentMenu.value.subTabs.findIndex(t => t.endpoint === tab.endpoint);
@@ -5588,6 +5988,8 @@
             fetchDateStats();
           } else if (tab.endpoint === '/api/v1/extensions/housing-subsidy-records') {
             fetchSubsidyStats();
+          } else if (currentMenuId.value === 'github') {
+            fetchGithubStats();
           }
         };
 
@@ -7637,6 +8039,444 @@
           return map[key] || key;
         };
 
+        // --------------------------------------------------------
+        // GitHub 开源治理与 PR 生命周期多维统计与图表 (github)
+        // --------------------------------------------------------
+        const fetchGithubStats = async () => {
+          githubStatsLoading.value = true;
+          try {
+            const url = new URL('/api/v1/extensions/github/stats', window.location.origin);
+            url.searchParams.set('limit', githubTopN.value);
+            url.searchParams.set('sort_by', githubSortBy.value);
+            const headers = getAuthHeaders();
+            const resp = await fetch(url.toString(), { headers });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            githubStats.value = data;
+            nextTick(() => {
+              renderAllGithubCharts();
+              setTimeout(() => {
+                resizeAllGithubCharts();
+              }, 60);
+            });
+          } catch (err) {
+            console.error('Failed to fetch github stats:', err);
+          } finally {
+            githubStatsLoading.value = false;
+          }
+        };
+
+        const resizeAllGithubCharts = () => {
+          if (githubBarChartInstance && !(githubBarChartInstance.isDisposed && githubBarChartInstance.isDisposed())) githubBarChartInstance.resize();
+          if (githubPieChartInstance && !(githubPieChartInstance.isDisposed && githubPieChartInstance.isDisposed())) githubPieChartInstance.resize();
+        };
+
+        const renderAllGithubCharts = () => {
+          if (githubChartCollapsed.value) return;
+          nextTick(() => {
+            renderGithubBarChart();
+            renderGithubPieChart();
+            setTimeout(() => {
+              resizeAllGithubCharts();
+            }, 60);
+          });
+        };
+
+        const switchGithubActiveTab = (tab) => {
+          githubActiveTab.value = tab;
+          nextTick(() => {
+            renderAllGithubCharts();
+            setTimeout(() => {
+              resizeAllGithubCharts();
+            }, 80);
+          });
+        };
+
+        const changeGithubTopN = (n) => {
+          githubTopN.value = n;
+          fetchGithubStats();
+        };
+
+        const changeGithubSortBy = (s) => {
+          githubSortBy.value = s;
+          fetchGithubStats();
+        };
+
+        const toggleGithubChartCollapse = () => {
+          githubChartCollapsed.value = !githubChartCollapsed.value;
+          if (!githubChartCollapsed.value) {
+            nextTick(() => {
+              renderAllGithubCharts();
+            });
+          }
+        };
+
+        const filterByGithubRepo = (repoName) => {
+          filterGithubRepo.value = repoName;
+          pagination.value.page = 1;
+          loadData();
+          showToast('项目筛选联动', `已快速筛选【${repoName}】相关记录`, 'info', 3000);
+        };
+
+        const filterByGithubState = (stateCode) => {
+          filterGithubState.value = stateCode;
+          pagination.value.page = 1;
+          loadData();
+          showToast('PR状态联动', `已快速筛选【${stateCode}】状态记录`, 'info', 3000);
+        };
+
+        const clearGithubFilters = () => {
+          searchKeyword.value = '';
+          filterGithubState.value = '';
+          filterGithubRepo.value = '';
+          filterGithubSecurity.value = false;
+          pagination.value.page = 1;
+          loadData();
+          showToast('筛选已清空', '已恢复展示全部开源治理记录', 'info', 2000);
+        };
+
+        const renderGithubBarChart = () => {
+          if (!githubBarChartEl.value || typeof echarts === 'undefined') return;
+          githubBarChartInstance = getOrInitChart(githubBarChartInstance, githubBarChartEl.value);
+          if (!githubBarChartInstance) return;
+
+          githubBarChartInstance.off('click');
+          githubBarChartInstance.on('click', (params) => {
+            if (params && params.name) {
+              filterByGithubRepo(params.name);
+            }
+          });
+
+          if (githubActiveTab.value === 'prs') {
+            const repos = githubStats.value.top_repos || [];
+            const categories = repos.map(r => r.repo_name);
+            const mergedData = repos.map(r => r.merged || 0);
+            const openData = repos.map(r => r.open || 0);
+            const closedData = repos.map(r => r.closed || 0);
+
+            const option = {
+              backgroundColor: 'transparent',
+              tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'shadow' },
+                backgroundColor: '#0f172a',
+                borderColor: '#334155',
+                borderWidth: 1,
+                padding: [10, 14],
+                textStyle: { color: '#f8fafc', fontSize: 12 },
+                formatter: function (params) {
+                  const repoName = params[0]?.name || '';
+                  const repo = repos.find(r => r.repo_name === repoName) || {};
+                  let total = repo.total || 0;
+                  let rows = '';
+                  params.forEach(p => {
+                    if (p.value > 0) {
+                      rows += `<div style="display:flex;justify-content:space-between;align-items:center;gap:16px;margin:3px 0;">
+                        <span style="display:flex;align-items:center;gap:6px;">${p.marker} ${p.seriesName}</span>
+                        <span style="font-family:monospace;font-weight:bold;">${p.value} 个</span>
+                      </div>`;
+                    }
+                  });
+                  return `
+                    <div style="font-weight:bold;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #334155;color:#fff;font-size:12px;display:flex;justify-content:space-between;gap:12px;">
+                      <span>${repoName}</span>
+                      <span style="color:#10b981;font-family:monospace;">合并率: ${repo.merge_rate || 0}%</span>
+                    </div>
+                    ${rows}
+                    <div style="margin-top:6px;padding-top:4px;border-top:1px solid #334155;display:flex;justify-content:space-between;color:#818cf8;font-weight:bold;">
+                      <span>PR 治理总数</span>
+                      <span style="font-family:monospace;">${total} 个</span>
+                    </div>
+                    <div style="margin-top:6px;font-size:10px;color:#94a3b8;text-align:right;">
+                      💡 点击柱体直接联动筛选下方 PR 列表
+                    </div>
+                  `;
+                }
+              },
+              grid: {
+                left: '2%',
+                right: '4%',
+                top: '4%',
+                bottom: '3%',
+                containLabel: true
+              },
+              xAxis: {
+                type: 'value',
+                splitLine: { lineStyle: { color: '#1e293b' } },
+                axisLabel: { color: '#94a3b8', fontSize: 10 }
+              },
+              yAxis: {
+                type: 'category',
+                inverse: true,
+                data: categories,
+                axisLine: { lineStyle: { color: '#334155' } },
+                axisLabel: {
+                  color: '#cbd5e1',
+                  fontSize: 11,
+                  formatter: function (val) {
+                    return val.length > 20 ? val.substring(0, 19) + '…' : val;
+                  }
+                }
+              },
+              series: [
+                {
+                  name: '已合并 (MERGED)',
+                  type: 'bar',
+                  stack: 'total',
+                  color: '#10b981',
+                  barWidth: 14,
+                  data: mergedData
+                },
+                {
+                  name: '开放推进中 (OPEN)',
+                  type: 'bar',
+                  stack: 'total',
+                  color: '#38bdf8',
+                  barWidth: 14,
+                  data: openData
+                },
+                {
+                  name: '已关闭 (CLOSED)',
+                  type: 'bar',
+                  stack: 'total',
+                  color: '#64748b',
+                  barWidth: 14,
+                  itemStyle: { borderRadius: [0, 3, 3, 0] },
+                  data: closedData
+                }
+              ]
+            };
+            githubBarChartInstance.setOption(option, true);
+          } else {
+            // 开源贡献与安全漏洞 (CVE)
+            const repos = githubStats.value.top_contrib_repos || [];
+            const categories = repos.map(r => r.repo_name);
+            const regularData = repos.map(r => (r.total || 0) - (r.security_count || 0));
+            const secData = repos.map(r => r.security_count || 0);
+
+            const option = {
+              backgroundColor: 'transparent',
+              tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'shadow' },
+                backgroundColor: '#0f172a',
+                borderColor: '#334155',
+                borderWidth: 1,
+                padding: [10, 14],
+                textStyle: { color: '#f8fafc', fontSize: 12 },
+                formatter: function (params) {
+                  const repoName = params[0]?.name || '';
+                  const repo = repos.find(r => r.repo_name === repoName) || {};
+                  let rows = '';
+                  params.forEach(p => {
+                    if (p.value > 0) {
+                      rows += `<div style="display:flex;justify-content:space-between;align-items:center;gap:16px;margin:3px 0;">
+                        <span style="display:flex;align-items:center;gap:6px;">${p.marker} ${p.seriesName}</span>
+                        <span style="font-family:monospace;font-weight:bold;">${p.value} 条</span>
+                      </div>`;
+                    }
+                  });
+                  return `
+                    <div style="font-weight:bold;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #334155;color:#fff;font-size:12px;">
+                      ${repoName}
+                    </div>
+                    ${rows}
+                    <div style="margin-top:6px;padding-top:4px;border-top:1px solid #334155;display:flex;justify-content:space-between;color:#818cf8;font-weight:bold;">
+                      <span>贡献总计</span>
+                      <span style="font-family:monospace;">${repo.total} 条</span>
+                    </div>
+                    <div style="margin-top:6px;font-size:10px;color:#94a3b8;text-align:right;">
+                      💡 点击柱体直接联动筛选下方开源贡献列表
+                    </div>
+                  `;
+                }
+              },
+              grid: {
+                left: '2%',
+                right: '4%',
+                top: '4%',
+                bottom: '3%',
+                containLabel: true
+              },
+              xAxis: {
+                type: 'value',
+                splitLine: { lineStyle: { color: '#1e293b' } },
+                axisLabel: { color: '#94a3b8', fontSize: 10 }
+              },
+              yAxis: {
+                type: 'category',
+                inverse: true,
+                data: categories,
+                axisLine: { lineStyle: { color: '#334155' } },
+                axisLabel: {
+                  color: '#cbd5e1',
+                  fontSize: 11,
+                  formatter: function (val) {
+                    return val.length > 20 ? val.substring(0, 19) + '…' : val;
+                  }
+                }
+              },
+              series: [
+                {
+                  name: '常规开源贡献',
+                  type: 'bar',
+                  stack: 'total',
+                  color: '#6366f1',
+                  barWidth: 14,
+                  data: regularData
+                },
+                {
+                  name: '安全漏洞(GHSA/CVE)',
+                  type: 'bar',
+                  stack: 'total',
+                  color: '#f59e0b',
+                  barWidth: 14,
+                  itemStyle: { borderRadius: [0, 3, 3, 0] },
+                  data: secData
+                }
+              ]
+            };
+            githubBarChartInstance.setOption(option, true);
+          }
+          githubBarChartInstance.resize();
+        };
+
+        const renderGithubPieChart = () => {
+          if (!githubPieChartEl.value || typeof echarts === 'undefined') return;
+          githubPieChartInstance = getOrInitChart(githubPieChartInstance, githubPieChartEl.value);
+          if (!githubPieChartInstance) return;
+
+          githubPieChartInstance.off('click');
+          githubPieChartInstance.on('click', (params) => {
+            if (params && params.data) {
+              if (params.data.stateCode) {
+                filterByGithubState(params.data.stateCode);
+              } else if (params.data.isSecurity) {
+                filterGithubSecurity.value = true;
+                pagination.value.page = 1;
+                loadData();
+                showToast('漏洞筛选联动', '已快速筛选标有 GHSA 漏洞编号的安全贡献', 'info', 3000);
+              }
+            }
+          });
+
+          if (githubActiveTab.value === 'prs') {
+            const summary = githubStats.value.summary || {};
+            const pieData = [
+              { value: summary.merged_prs || 0, name: '已合并 (MERGED)', stateCode: 'MERGED', itemStyle: { color: '#10b981' } },
+              { value: summary.open_prs || 0, name: '开放中 (OPEN)', stateCode: 'OPEN', itemStyle: { color: '#38bdf8' } },
+              { value: summary.closed_prs || 0, name: '已关闭 (CLOSED)', stateCode: 'CLOSED', itemStyle: { color: '#64748b' } }
+            ].filter(d => d.value > 0);
+
+            const pieOption = {
+              backgroundColor: 'transparent',
+              tooltip: {
+                trigger: 'item',
+                backgroundColor: '#0f172a',
+                borderColor: '#334155',
+                borderWidth: 1,
+                padding: [8, 12],
+                textStyle: { color: '#f8fafc', fontSize: 12 },
+                formatter: '{b}: <span style="font-family:monospace;font-weight:bold;">{c} 个</span> ({d}%)'
+              },
+              legend: {
+                bottom: '0%',
+                left: 'center',
+                itemWidth: 10,
+                itemHeight: 10,
+                textStyle: { color: '#94a3b8', fontSize: 11 }
+              },
+              series: [
+                {
+                  name: 'PR 状态分布',
+                  type: 'pie',
+                  radius: ['45%', '70%'],
+                  center: ['50%', '42%'],
+                  avoidLabelOverlap: false,
+                  itemStyle: {
+                    borderRadius: 4,
+                    borderColor: '#020617',
+                    borderWidth: 2
+                  },
+                  label: {
+                    show: false,
+                    position: 'center'
+                  },
+                  emphasis: {
+                    label: {
+                      show: true,
+                      fontSize: 13,
+                      fontWeight: 'bold',
+                      color: '#fff',
+                      formatter: '{b}\n{c} 个 ({d}%)'
+                    }
+                  },
+                  data: pieData
+                }
+              ]
+            };
+            githubPieChartInstance.setOption(pieOption, true);
+          } else {
+            const summary = githubStats.value.summary || {};
+            const sec = summary.security_contributions || 0;
+            const reg = (summary.total_contributions || 0) - sec;
+            const pieData = [
+              { value: reg, name: '特性与常规贡献', isSecurity: false, itemStyle: { color: '#6366f1' } },
+              { value: sec, name: '安全漏洞(CVE)', isSecurity: true, itemStyle: { color: '#f59e0b' } }
+            ].filter(d => d.value > 0);
+
+            const pieOption = {
+              backgroundColor: 'transparent',
+              tooltip: {
+                trigger: 'item',
+                backgroundColor: '#0f172a',
+                borderColor: '#334155',
+                borderWidth: 1,
+                padding: [8, 12],
+                textStyle: { color: '#f8fafc', fontSize: 12 },
+                formatter: '{b}: <span style="font-family:monospace;font-weight:bold;">{c} 条</span> ({d}%)'
+              },
+              legend: {
+                bottom: '0%',
+                left: 'center',
+                itemWidth: 10,
+                itemHeight: 10,
+                textStyle: { color: '#94a3b8', fontSize: 11 }
+              },
+              series: [
+                {
+                  name: '贡献属性分布',
+                  type: 'pie',
+                  radius: ['45%', '70%'],
+                  center: ['50%', '42%'],
+                  avoidLabelOverlap: false,
+                  itemStyle: {
+                    borderRadius: 4,
+                    borderColor: '#020617',
+                    borderWidth: 2
+                  },
+                  label: {
+                    show: false,
+                    position: 'center'
+                  },
+                  emphasis: {
+                    label: {
+                      show: true,
+                      fontSize: 13,
+                      fontWeight: 'bold',
+                      color: '#fff',
+                      formatter: '{b}\n{c} 条'
+                    }
+                  },
+                  data: pieData
+                }
+              ]
+            };
+            githubPieChartInstance.setOption(pieOption, true);
+          }
+          githubPieChartInstance.resize();
+        };
+
         const handleJump = () => {
           let p = parseInt(jumpPageNum.value);
           if (isNaN(p)) return;
@@ -8040,6 +8880,8 @@
             if (subsidyTalentTypeChartInstance && !(subsidyTalentTypeChartInstance.isDisposed && subsidyTalentTypeChartInstance.isDisposed())) subsidyTalentTypeChartInstance.resize();
             if (subsidySpouseRelationChartInstance && !(subsidySpouseRelationChartInstance.isDisposed && subsidySpouseRelationChartInstance.isDisposed())) subsidySpouseRelationChartInstance.resize();
             if (subsidySpouseUnitChartInstance && !(subsidySpouseUnitChartInstance.isDisposed && subsidySpouseUnitChartInstance.isDisposed())) subsidySpouseUnitChartInstance.resize();
+            if (githubBarChartInstance && !(githubBarChartInstance.isDisposed && githubBarChartInstance.isDisposed())) githubBarChartInstance.resize();
+            if (githubPieChartInstance && !(githubPieChartInstance.isDisposed && githubPieChartInstance.isDisposed())) githubPieChartInstance.resize();
           });
           window.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
@@ -8073,6 +8915,8 @@
               fetchDateStats();
               fetchBirthYearStats();
             }
+          } else if (currentMenuId.value === 'github') {
+            fetchGithubStats();
           }
         });
 
@@ -8251,7 +9095,27 @@
           filterMatchedTalent,
           toggleFilterMatchedTalent,
           openNoticeDetailById,
-          openMatchedTalentModal
+          openMatchedTalentModal,
+          githubStats,
+          githubStatsLoading,
+          githubChartCollapsed,
+          githubActiveTab,
+          githubTopN,
+          githubSortBy,
+          filterGithubState,
+          filterGithubRepo,
+          filterGithubSecurity,
+          githubBarChartEl,
+          githubPieChartEl,
+          fetchGithubStats,
+          renderAllGithubCharts,
+          switchGithubActiveTab,
+          changeGithubTopN,
+          changeGithubSortBy,
+          toggleGithubChartCollapse,
+          filterByGithubRepo,
+          filterByGithubState,
+          clearGithubFilters
         };
       }
     }).mount('#app');

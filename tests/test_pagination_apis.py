@@ -125,9 +125,32 @@ def test_all_apis():
     assert "decade_summary" in d_by_stats
     print(f"[OK] Talent Birth Year Stats -> decades={len(d_by_stats['decade_summary'])}")
 
+    # Test GitHub Stats & Repository / PR State Perspectives
+    print("--------------------------------------------------")
+    resp_gh_stats = client.get("/api/v1/extensions/github/stats?limit=10", headers=auth_headers)
+    assert resp_gh_stats.status_code == 200
+    gh_data = resp_gh_stats.json()
+    assert "summary" in gh_data
+    assert "pr_states" in gh_data and len(gh_data["pr_states"]) == 3
+    assert "top_repos" in gh_data and len(gh_data["top_repos"]) > 0
+    assert gh_data["summary"]["total_prs"] >= 477
+    assert gh_data["summary"]["merged_prs"] >= 100
+    print(f"[OK] GitHub Stats -> total_prs={gh_data['summary']['total_prs']}, repos={len(gh_data['top_repos'])}, merge_rate={gh_data['summary']['merge_rate']}%")
+
+    resp_gh_filter = client.get("/api/v1/extensions/github-prs?repo_name=loulanyue/interview-notes&state=MERGED&page=1&page_size=5", headers=auth_headers)
+    assert resp_gh_filter.status_code == 200
+    gh_filter_data = resp_gh_filter.json()
+    assert gh_filter_data["total"] == 38
+    print(f"[OK] GitHub PR Filter (repo + state) -> matched total={gh_filter_data['total']}")
+
+    resp_dashboard_gh = client.get("/dashboard/github")
+    assert resp_dashboard_gh.status_code == 200
+    assert "PR 状态与项目透视" in resp_dashboard_gh.text
+    print(f"[OK] GET /dashboard/github                 | HTML rendered successfully with GitHub analytics")
+
     print("==================================================")
     if all_passed:
-        print("🎉 ALL 24 BUSINESS PAGINATION ENDPOINTS & DASHBOARD PASSED PERFECTLY!")
+        print("🎉 ALL BUSINESS PAGINATION ENDPOINTS & DASHBOARD PASSED PERFECTLY!")
     else:
         print("❌ SOME ENDPOINTS FAILED")
     print("==================================================")
