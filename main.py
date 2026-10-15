@@ -40,6 +40,12 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def security_startup_check():
+    try:
+        from scripts.seed_servers import seed_server_credentials
+        seed_server_credentials()
+    except Exception as e:
+        logger.warning(f"Auto table creation / seed skipped or failed: {e}")
+
     if settings.REQUIRE_AUTH:
         if settings.API_KEY:
             logger.info("🔐 [SECURITY] API 身份认证已启用 (Master API Key 已配置)")

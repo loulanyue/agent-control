@@ -21,14 +21,17 @@ from app.models.extensions import (
     TwitterFrontierTechPost
 )
 from app.models.contract import CodeContract, ContractRevision, ContractConsumer
+from app.models.server_credential import ServerCredential, ServerAccessLog
+from app.api.v1.servers import ensure_server_tables_initialized
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 @router.get("/stats")
 def get_dashboard_stats(db: Session = Depends(get_db)):
     """
-    获取全局 12 大业务模块的统计指标与数据量概览
+    获取全局业务模块的统计指标与数据量概览
     """
+    ensure_server_tables_initialized(db)
     return {
         "talent": {
             "total_notices": db.query(func.count(HzTalentNotice.id)).scalar() or 0,
@@ -125,6 +128,12 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
             "total_revisions": db.query(func.count(ContractRevision.id)).scalar() or 0,
             "total_consumers": db.query(func.count(ContractConsumer.id)).scalar() or 0,
             "frozen_contracts": db.query(func.count(CodeContract.id)).filter(CodeContract.is_breaking_frozen == True).scalar() or 0
+        },
+        "servers": {
+            "total_servers": db.query(func.count(ServerCredential.id)).scalar() or 0,
+            "active_servers": db.query(func.count(ServerCredential.id)).filter(ServerCredential.status == "active").scalar() or 0,
+            "online_servers": db.query(func.count(ServerCredential.id)).filter(ServerCredential.last_check_status == "online").scalar() or 0,
+            "access_logs": db.query(func.count(ServerAccessLog.id)).scalar() or 0
         }
     }
 

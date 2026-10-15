@@ -224,6 +224,22 @@
             <span>派发新任务</span>
           </button>
 
+          <!-- 服务器凭据管控专属：新增服务器 & Agent 免密操作台 -->
+          <button
+            v-if="currentMenuId === 'servers'"
+            @click="openServerModal()"
+            class="px-3.5 py-1.5 bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 hover:from-indigo-500 hover:to-violet-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-indigo-600/30 border border-indigo-400/30 transition-all cursor-pointer">
+            <i class="fa-solid fa-plus text-indigo-200"></i>
+            <span>新增服务器凭据</span>
+          </button>
+          <button
+            v-if="currentMenuId === 'servers'"
+            @click="openServerOpsModal(items[0] || null)"
+            class="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white rounded-lg border border-emerald-500/40 text-xs font-medium flex items-center gap-1.5 transition cursor-pointer">
+            <i class="fa-solid fa-terminal text-xs"></i>
+            <span>Agent 免密命令 / 传文件</span>
+          </button>
+
           <!-- 子标签切换 (若有多个子表) -->
           <div v-if="currentMenu.subTabs && currentMenu.subTabs.length > 1" class="flex bg-slate-800/80 p-1 rounded-lg border border-slate-700">
             <button
@@ -912,6 +928,62 @@
             class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex-shrink-0 transition inline-flex items-center gap-1.5 shadow-md shadow-indigo-600/30">
             <i class="fa-solid fa-plus text-xs"></i>
             <span>录入契约</span>
+          </button>
+        </div>
+
+        <!-- 服务器凭据管控专属筛选栏 -->
+        <div v-else-if="currentMenuId === 'servers'" class="flex flex-wrap items-center gap-2.5 flex-1 min-w-[320px]">
+          <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+            <i class="fa-solid fa-cubes text-indigo-400"></i>
+            <span class="text-slate-400 text-[11px] select-none">所属项目:</span>
+            <select
+              v-model="filterServerProject"
+              @change="handleSearch"
+              class="bg-transparent text-slate-200 focus:outline-none cursor-pointer">
+              <option value="">全部项目</option>
+              <option value="tpm-backend-app">tpm-backend-app (业务后端)</option>
+              <option value="tpm-frontend-web">tpm-frontend-web (前端工程)</option>
+              <option value="tpm-backend-file">tpm-backend-file (文件服务)</option>
+              <option value="tpm-proofread-service">tpm-proofread-service (校对服务)</option>
+              <option value="agent-control">agent-control (管控平台)</option>
+            </select>
+          </div>
+
+          <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+            <i class="fa-solid fa-layer-group text-amber-400"></i>
+            <span class="text-slate-400 text-[11px] select-none">环境:</span>
+            <select
+              v-model="filterServerEnv"
+              @change="handleSearch"
+              class="bg-transparent text-slate-200 focus:outline-none cursor-pointer">
+              <option value="">全部环境</option>
+              <option value="prod">prod (生产环境)</option>
+              <option value="staging">staging (预发环境)</option>
+              <option value="test">test (测试环境)</option>
+              <option value="dev">dev (开发环境)</option>
+            </select>
+          </div>
+
+          <div class="relative min-w-[200px] flex-1">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+            <input
+              type="text"
+              v-model="searchKeyword"
+              @keyup.enter="handleSearch"
+              placeholder="搜索服务器标识(SRV-ID)、名称、IP地址、登录账号、备注..."
+              class="w-full pl-8 pr-4 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+          </div>
+
+          <button
+            @click="handleSearch"
+            class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium flex-shrink-0 transition shadow-sm">
+            查询
+          </button>
+          <button
+            v-if="searchKeyword || filterServerProject || filterServerEnv"
+            @click="clearServerFilters"
+            class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs flex-shrink-0 transition border border-slate-700">
+            重置
           </button>
         </div>
 
@@ -2984,6 +3056,120 @@
           </div>
         </div>
 
+        <!-- 服务器凭据管控专属：零泄露加密保险库全景看板 -->
+        <div
+          v-if="currentMenuId === 'servers'"
+          class="mb-4 bg-gradient-to-br from-slate-900 via-slate-900/95 to-indigo-950/30 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
+          <div class="px-5 py-3.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-900/80">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-emerald-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
+                <i class="fa-solid fa-user-shield text-sm"></i>
+              </div>
+              <div>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-sm font-bold text-white">服务器登录凭据保险库 · Agent 免密托管执行引擎 (Server Vault)</span>
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                    <i class="fa-solid fa-lock text-[9px] mr-1"></i>Fernet/AES 密文存储 · 密码零泄露
+                  </span>
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                    支持按 server_id 免密执行命令与上传/下载文件
+                  </span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-0.5">
+                  密码入库即加密且永不明文回显；Agent 通过 <code class="text-indigo-300 font-mono">server_id</code> 调用 MCP 工具或 CLI，由后端在受控 PTY 内存中完成认证与输出脱敏。
+                </p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button
+                @click="openServerModal()"
+                class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow transition">
+                <i class="fa-solid fa-plus text-[11px]"></i>
+                <span>新增服务器</span>
+              </button>
+              <button
+                @click="openServerOpsModal(items[0] || null)"
+                class="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white rounded-lg border border-emerald-500/40 text-xs font-medium flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-terminal text-[11px]"></i>
+                <span>免密命令 / 文件传输</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="p-4 grid grid-cols-2 md:grid-cols-4 gap-3 bg-slate-900/40">
+            <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+              <div class="text-[11px] text-slate-400 flex items-center justify-between">
+                <span>纳管服务器总数</span>
+                <i class="fa-solid fa-server text-indigo-400"></i>
+              </div>
+              <div class="text-xl font-bold font-mono text-white mt-1">
+                [[ serverStats.total_servers || 0 ]]
+                <span class="text-xs font-normal text-slate-400 ml-1">台节点</span>
+              </div>
+              <div class="text-[10px] text-emerald-400 font-mono mt-1">
+                启用中: [[ serverStats.active_servers || 0 ]] 台 · 凭据 100% 密文托管
+              </div>
+            </div>
+
+            <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+              <div class="text-[11px] text-slate-400 flex items-center justify-between">
+                <span>在线可达节点</span>
+                <i class="fa-solid fa-signal text-emerald-400"></i>
+              </div>
+              <div class="text-xl font-bold font-mono text-emerald-400 mt-1">
+                [[ serverStats.online_servers || 0 ]]
+                <span class="text-xs font-normal text-slate-400 ml-1">台在线</span>
+              </div>
+              <div class="text-[10px] text-slate-400 font-mono mt-1">
+                支持 TCP/SSH 握手探测与认证校验
+              </div>
+            </div>
+
+            <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+              <div class="text-[11px] text-slate-400 flex items-center justify-between">
+                <span>覆盖业务项目</span>
+                <i class="fa-solid fa-cubes text-amber-400"></i>
+              </div>
+              <div class="text-xl font-bold font-mono text-amber-400 mt-1">
+                [[ (serverStats.projects_distribution && serverStats.projects_distribution.length) || 4 ]]
+                <span class="text-xs font-normal text-slate-400 ml-1">个子工程</span>
+              </div>
+              <div class="text-[10px] text-slate-400 font-mono mt-1 truncate">
+                tpm-backend-app / web / file / proofread
+              </div>
+            </div>
+
+            <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+              <div class="text-[11px] text-slate-400 flex items-center justify-between">
+                <span>Agent 托管审计记录</span>
+                <i class="fa-solid fa-clipboard-check text-sky-400"></i>
+              </div>
+              <div class="text-xl font-bold font-mono text-sky-400 mt-1">
+                [[ serverStats.total_logs || 0 ]]
+                <span class="text-xs font-normal text-slate-400 ml-1">次调用</span>
+              </div>
+              <div class="text-[10px] text-slate-400 font-mono mt-1">
+                命令执行与 SCP 上传/下载全量脱敏留痕
+              </div>
+            </div>
+          </div>
+
+          <div class="px-4 py-2.5 bg-indigo-950/30 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div class="flex items-center gap-2 text-indigo-300 flex-wrap">
+              <span class="font-bold text-emerald-400 flex items-center gap-1">
+                <i class="fa-solid fa-terminal"></i>
+                Agent 快捷调用方式:
+              </span>
+              <code class="font-mono bg-slate-950 text-emerald-300 px-2 py-0.5 rounded border border-slate-800 text-[11px]">
+                MCP: control_exec_server_command / control_upload_server_file / control_download_server_file
+              </code>
+              <code class="font-mono bg-slate-950 text-indigo-300 px-2 py-0.5 rounded border border-slate-800 text-[11px]">
+                CLI: python3 agent-control/scripts/agent_ssh.py exec|upload|download &lt;server_id&gt; ...
+              </code>
+            </div>
+          </div>
+        </div>
+
         <!-- 加载中遮罩 -->
         <div v-if="loading" class="absolute inset-0 bg-slate-950/60 backdrop-blur-[2px] flex items-center justify-center z-10">
           <div class="flex flex-col items-center gap-2">
@@ -3037,9 +3223,9 @@
                 class="hover:bg-slate-800/40 transition-colors group">
                 
                 <td v-for="col in currentColumns" :key="col.key" class="px-4 py-3 text-slate-300 whitespace-nowrap" :class="col.cellClass || ''">
-                  <!-- 岗位名称/申报人/要素核心名称/招投标项目/契约编号与标题：支持点击直接打开完整详情抽屉 -->
+                  <!-- 岗位名称/申报人/要素核心名称/招投标项目/契约编号与标题/服务器标识：支持点击直接打开完整详情抽屉 -->
                   <button
-                    v-if="col.key === 'position_title' || col.key === 'person_name' || col.key === 'item_name' || col.key === 'project_name' || col.key === 'contract_id' || col.key === 'title'"
+                    v-if="col.key === 'position_title' || col.key === 'person_name' || col.key === 'item_name' || col.key === 'project_name' || col.key === 'contract_id' || col.key === 'title' || col.key === 'server_id'"
                     @click.stop="viewDetail(row)"
                     type="button"
                     class="text-left font-bold text-indigo-300 hover:text-white hover:underline transition-all inline-flex items-center gap-1.5 cursor-pointer group/title select-text"
@@ -3133,6 +3319,39 @@
                         @click="confirmDeleteJob(row)"
                         class="text-rose-400 hover:text-rose-300 font-medium hover:underline text-xs inline-flex items-center gap-1"
                         title="删除该在招岗位及关联能力画像">
+                        <i class="fa-solid fa-trash text-[11px]"></i>
+                        删除
+                      </button>
+                    </template>
+
+                    <!-- 服务器凭据主表专属：测试连通、免密命令/传文件、复制调用命令、编辑、删除 -->
+                    <template v-if="currentSubTab.endpoint === '/api/v1/servers'">
+                      <button
+                        @click.stop="testServerConn(row)"
+                        :disabled="testingServerId === row.server_id"
+                        class="text-emerald-400 hover:text-emerald-300 font-medium hover:underline text-xs inline-flex items-center gap-1 disabled:opacity-50"
+                        title="测试服务器 TCP/SSH 端口连通性">
+                        <i :class="testingServerId === row.server_id ? 'fa-solid fa-spinner fa-spin text-[11px]' : 'fa-solid fa-plug-circle-check text-[11px]'"></i>
+                        <span>[[ testingServerId === row.server_id ? '探测中' : '测试连通' ]]</span>
+                      </button>
+                      <button
+                        @click.stop="openServerOpsModal(row)"
+                        class="text-sky-400 hover:text-sky-300 font-medium hover:underline text-xs inline-flex items-center gap-1"
+                        title="按 server_id 免密执行远程命令或上传/下载文件">
+                        <i class="fa-solid fa-terminal text-[11px]"></i>
+                        命令/传文件
+                      </button>
+                      <button
+                        @click.stop="openServerModal(row)"
+                        class="text-amber-400 hover:text-amber-300 font-medium hover:underline text-xs inline-flex items-center gap-1"
+                        title="编辑服务器 IP、账号与加密密码">
+                        <i class="fa-solid fa-pen-to-square text-[11px]"></i>
+                        编辑
+                      </button>
+                      <button
+                        @click.stop="deleteServerRow(row)"
+                        class="text-rose-400 hover:text-rose-300 font-medium hover:underline text-xs inline-flex items-center gap-1"
+                        title="删除该服务器凭据">
                         <i class="fa-solid fa-trash text-[11px]"></i>
                         删除
                       </button>
@@ -5168,6 +5387,387 @@
       </div>
     </div>
 
+    <!-- 3. 新增 / 编辑服务器登录凭据模态框 (Server Vault Modal) -->
+    <div v-if="serverModalVisible" @click.self="serverModalVisible = false" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer">
+      <div @click.stop class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150 cursor-default">
+        <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-850">
+          <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
+              <i class="fa-solid fa-user-shield text-sm"></i>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-white">[[ isEditingServer ? '编辑服务器登录凭据' : '新增服务器登录凭据' ]]</h3>
+              <p class="text-[11px] text-slate-400">密码通过 Fernet/AES 实时加密入库，数据库与接口永不回显明文</p>
+            </div>
+          </div>
+          <button @click="serverModalVisible = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div class="p-6 space-y-4 max-h-[74vh] overflow-y-auto">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">服务器唯一标识 (server_id) <span class="text-rose-400">*</span></label>
+              <input
+                type="text"
+                v-model="serverForm.server_id"
+                :disabled="isEditingServer"
+                placeholder="例如: SRV-TPM-APP-PROD-01"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-indigo-300 focus:outline-none focus:border-indigo-500 disabled:opacity-60">
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">服务器名称 <span class="text-rose-400">*</span></label>
+              <input
+                type="text"
+                v-model="serverForm.name"
+                placeholder="例如: TPM 业务后端生产主节点"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">所属项目</label>
+              <input
+                type="text"
+                list="server-project-options"
+                v-model="serverForm.project_name"
+                placeholder="例如: tpm-backend-app"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500">
+              <datalist id="server-project-options">
+                <option value="tpm-backend-app"></option>
+                <option value="tpm-frontend-web"></option>
+                <option value="tpm-backend-file"></option>
+                <option value="tpm-proofread-service"></option>
+                <option value="agent-control"></option>
+              </datalist>
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">运行环境</label>
+              <select
+                v-model="serverForm.environment"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer">
+                <option value="prod">prod (生产环境)</option>
+                <option value="staging">staging (预发环境)</option>
+                <option value="test">test (测试环境)</option>
+                <option value="dev">dev (开发环境)</option>
+              </select>
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">状态</label>
+              <select
+                v-model="serverForm.status"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer">
+                <option value="active">active (启用)</option>
+                <option value="disabled">disabled (禁用)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="space-y-1 md:col-span-2">
+              <label class="text-xs font-semibold text-slate-300">服务器 IP 地址或域名 <span class="text-rose-400">*</span></label>
+              <input
+                type="text"
+                v-model="serverForm.host"
+                placeholder="例如: 192.168.10.101"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-emerald-300 focus:outline-none focus:border-indigo-500">
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">SSH 端口</label>
+              <input
+                type="number"
+                v-model.number="serverForm.port"
+                placeholder="22"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-amber-300 focus:outline-none focus:border-indigo-500">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">登录账号 (username) <span class="text-rose-400">*</span></label>
+              <input
+                type="text"
+                v-model="serverForm.username"
+                placeholder="例如: root 或 deploy"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-white focus:outline-none focus:border-indigo-500">
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">认证方式</label>
+              <select
+                v-model="serverForm.auth_type"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer">
+                <option value="password">password (账号密码认证)</option>
+                <option value="ssh_key">ssh_key (SSH 私钥认证)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="space-y-1">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-semibold text-slate-300">
+                登录密码 (Vault 加密存储，不回显)
+                <span v-if="isEditingServer" class="text-emerald-400 font-normal ml-1">· 留空则保持原加密密码不变</span>
+              </label>
+              <button
+                type="button"
+                @click="showPasswordInput = !showPasswordInput"
+                class="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+                <i :class="showPasswordInput ? 'fa-regular fa-eye-slash' : 'fa-regular fa-eye'"></i>
+                <span>[[ showPasswordInput ? '隐藏输入' : '显示输入' ]]</span>
+              </button>
+            </div>
+            <input
+              :type="showPasswordInput ? 'text' : 'password'"
+              v-model="serverForm.password"
+              autocomplete="new-password"
+              :placeholder="isEditingServer ? '已加密保存 (********)，如需修改请输入新密码' : '请输入服务器登录密码（入库自动 AES/Fernet 加密）'"
+              class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-amber-300 focus:outline-none focus:border-indigo-500">
+          </div>
+
+          <div v-if="serverForm.auth_type === 'ssh_key'" class="space-y-1">
+            <label class="text-xs font-semibold text-slate-300">
+              SSH 私钥内容 (PEM)
+              <span v-if="isEditingServer" class="text-emerald-400 font-normal ml-1">· 留空则保持原私钥不变</span>
+            </label>
+            <textarea
+              v-model="serverForm.private_key"
+              rows="3"
+              placeholder="-----BEGIN OPENSSH PRIVATE KEY----- ..."
+              class="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-slate-300 focus:outline-none focus:border-indigo-500"></textarea>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">默认远程工作目录</label>
+              <input
+                type="text"
+                v-model="serverForm.default_workdir"
+                placeholder="例如: /opt/tpm/tpm-backend-app"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-slate-300 focus:outline-none focus:border-indigo-500">
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">标签 (逗号分隔)</label>
+              <input
+                type="text"
+                v-model="serverForm.tags_text"
+                placeholder="例如: spring-boot, jdk17, prod"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-slate-300 focus:outline-none focus:border-indigo-500">
+            </div>
+          </div>
+
+          <div class="space-y-1">
+            <label class="text-xs font-semibold text-slate-300">服务器用途与 Agent 操作备注</label>
+            <textarea
+              v-model="serverForm.description"
+              rows="2"
+              placeholder="描述该服务器部署的服务组件、端口或 Agent 发布脚本注意事项..."
+              class="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+          </div>
+        </div>
+
+        <div class="px-6 py-3.5 border-t border-slate-800 bg-slate-900 flex items-center justify-end gap-2">
+          <button
+            @click="serverModalVisible = false"
+            class="px-4 py-1.5 text-xs text-slate-400 hover:text-white rounded-lg transition">
+            取消
+          </button>
+          <button
+            @click="submitServerForm"
+            :disabled="savingServer || !serverForm.server_id.trim() || !serverForm.name.trim() || !serverForm.host.trim() || !serverForm.username.trim()"
+            class="px-4 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow transition disabled:opacity-50 flex items-center gap-1.5">
+            <i :class="savingServer ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-shield-halved'"></i>
+            <span>[[ savingServer ? '加密保存中...' : (isEditingServer ? '保存更新' : '加密入库') ]]</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Agent 免密命令执行 & 文件上传/下载控制台模态框 (Server Ops Modal) -->
+    <div v-if="serverOpsModalVisible" @click.self="serverOpsModalVisible = false" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer">
+      <div @click.stop class="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150 cursor-default">
+        <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-850">
+          <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+              <i class="fa-solid fa-terminal text-sm"></i>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-white">Agent 免密远程命令执行 & SCP 文件上传/下载</h3>
+              <p class="text-[11px] text-slate-400">仅需指定 <code class="text-indigo-300 font-mono">server_id</code>，后端自动从加密库提取凭据在受控 PTY 注入执行，密码零泄露</p>
+            </div>
+          </div>
+          <button @click="serverOpsModalVisible = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div class="p-6 space-y-4 max-h-[76vh] overflow-y-auto">
+          <!-- 选择目标服务器 + 操作模式切换 -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">目标服务器标识 (server_id 或 IP)</label>
+              <input
+                type="text"
+                v-model="serverOpsForm.server_id"
+                placeholder="例如: SRV-TPM-APP-PROD-01"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-indigo-300 focus:outline-none focus:border-indigo-500">
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">操作模式</label>
+              <div class="flex bg-slate-950 p-1 rounded-lg border border-slate-800">
+                <button
+                  type="button"
+                  @click="serverOpsForm.mode = 'exec'; serverOpsResult = null"
+                  :class="serverOpsForm.mode === 'exec' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
+                  class="flex-1 py-1 rounded text-xs transition">
+                  <i class="fa-solid fa-terminal mr-1"></i>免密执行命令
+                </button>
+                <button
+                  type="button"
+                  @click="serverOpsForm.mode = 'upload'; serverOpsResult = null"
+                  :class="serverOpsForm.mode === 'upload' ? 'bg-emerald-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
+                  class="flex-1 py-1 rounded text-xs transition">
+                  <i class="fa-solid fa-cloud-arrow-up mr-1"></i>免密上传文件
+                </button>
+                <button
+                  type="button"
+                  @click="serverOpsForm.mode = 'download'; serverOpsResult = null"
+                  :class="serverOpsForm.mode === 'download' ? 'bg-sky-600 text-white font-semibold' : 'text-slate-400 hover:text-white'"
+                  class="flex-1 py-1 rounded text-xs transition">
+                  <i class="fa-solid fa-cloud-arrow-down mr-1"></i>免密下载文件
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 模式 1: 免密执行命令 -->
+          <div v-if="serverOpsForm.mode === 'exec'" class="space-y-3">
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">远程工作目录 (可选，默认使用服务器 default_workdir)</label>
+              <input
+                type="text"
+                v-model="serverOpsForm.workdir"
+                placeholder="例如: /opt/tpm/tpm-backend-app"
+                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-slate-300 focus:outline-none focus:border-indigo-500">
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">待执行 Shell 命令 <span class="text-rose-400">*</span></label>
+              <textarea
+                v-model="serverOpsForm.command"
+                rows="3"
+                placeholder="例如: uname -a && ps -ef | grep java"
+                class="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-emerald-300 focus:outline-none focus:border-indigo-500"></textarea>
+            </div>
+          </div>
+
+          <!-- 模式 2: 免密上传文件 -->
+          <div v-if="serverOpsForm.mode === 'upload'" class="space-y-3">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="space-y-1">
+                <label class="text-xs font-semibold text-slate-300">宿主机本地文件/目录路径 (local_path)</label>
+                <input
+                  type="text"
+                  v-model="serverOpsForm.local_path"
+                  placeholder="例如: /Users/youfanyu/Desktop/workspace/tpm/..."
+                  class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500">
+              </div>
+              <div class="space-y-1">
+                <label class="text-xs font-semibold text-slate-300">目标服务器远程路径 (remote_path) <span class="text-rose-400">*</span></label>
+                <input
+                  type="text"
+                  v-model="serverOpsForm.remote_path"
+                  placeholder="例如: /opt/tpm/app.jar"
+                  class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-emerald-300 focus:outline-none focus:border-indigo-500">
+              </div>
+            </div>
+            <div class="space-y-1">
+              <label class="text-xs font-semibold text-slate-300">或直接粘贴要上传的文本/脚本内容 (未填 local_path 时生效)</label>
+              <textarea
+                v-model="serverOpsForm.content_text"
+                rows="3"
+                placeholder="可选：直接输入配置文件或脚本内容并免密上传至 remote_path..."
+                class="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-slate-300 focus:outline-none focus:border-indigo-500"></textarea>
+            </div>
+            <label class="inline-flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" v-model="serverOpsForm.recursive" class="rounded bg-slate-950 border-slate-700 text-indigo-600">
+              <span>递归上传整个目录 (-r)</span>
+            </label>
+          </div>
+
+          <!-- 模式 3: 免密下载文件 -->
+          <div v-if="serverOpsForm.mode === 'download'" class="space-y-3">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="space-y-1">
+                <label class="text-xs font-semibold text-slate-300">目标服务器远程源路径 (remote_path) <span class="text-rose-400">*</span></label>
+                <input
+                  type="text"
+                  v-model="serverOpsForm.remote_path"
+                  placeholder="例如: /opt/tpm/logs/application.log"
+                  class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-sky-300 focus:outline-none focus:border-indigo-500">
+              </div>
+              <div class="space-y-1">
+                <label class="text-xs font-semibold text-slate-300">下载保存到宿主机本地路径 (local_path，留空则直接在线预览)</label>
+                <input
+                  type="text"
+                  v-model="serverOpsForm.local_path"
+                  placeholder="例如: /tmp/downloaded_app.log"
+                  class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500">
+              </div>
+            </div>
+            <label class="inline-flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" v-model="serverOpsForm.recursive" class="rounded bg-slate-950 border-slate-700 text-indigo-600">
+              <span>递归下载整个目录 (-r)</span>
+            </label>
+          </div>
+
+          <!-- Agent 等价调用命令快速复制区 -->
+          <div class="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5 text-[11px] font-mono">
+            <div class="text-slate-400 flex items-center justify-between">
+              <span><i class="fa-solid fa-robot text-indigo-400 mr-1"></i>Agent 免密调用命令预览 (可直接复制给 Agent 使用):</span>
+            </div>
+            <div v-if="serverOpsForm.mode === 'exec'" class="text-emerald-300 break-all select-all">
+              python3 agent-control/scripts/agent_ssh.py exec [[ serverOpsForm.server_id || 'SRV-ID' ]] "[[ serverOpsForm.command || 'uptime' ]]"
+            </div>
+            <div v-else-if="serverOpsForm.mode === 'upload'" class="text-emerald-300 break-all select-all">
+              python3 agent-control/scripts/agent_ssh.py upload [[ serverOpsForm.server_id || 'SRV-ID' ]] [[ serverOpsForm.local_path || './local_file' ]] [[ serverOpsForm.remote_path || '/opt/app/remote_file' ]]
+            </div>
+            <div v-else class="text-sky-300 break-all select-all">
+              python3 agent-control/scripts/agent_ssh.py download [[ serverOpsForm.server_id || 'SRV-ID' ]] [[ serverOpsForm.remote_path || '/opt/app/remote_file' ]] [[ serverOpsForm.local_path || './local_file' ]]
+            </div>
+          </div>
+
+          <!-- 执行结果输出面板 -->
+          <div v-if="serverOpsResult" class="p-4 rounded-xl border text-xs font-mono space-y-2" :class="serverOpsResult.success ? 'bg-emerald-950/20 border-emerald-500/40 text-emerald-200' : 'bg-rose-950/20 border-rose-500/40 text-rose-200'">
+            <div class="flex items-center justify-between font-bold">
+              <span>
+                <i :class="serverOpsResult.success ? 'fa-solid fa-circle-check text-emerald-400 mr-1.5' : 'fa-solid fa-circle-xmark text-rose-400 mr-1.5'"></i>
+                [[ serverOpsResult.success ? '免密托管操作执行成功' : '操作执行返回异常' ]]
+                (Exit: [[ serverOpsResult.exit_code ]], 耗时: [[ serverOpsResult.duration_sec ]]s)
+              </span>
+            </div>
+            <pre v-if="serverOpsResult.output" class="p-2.5 bg-slate-950 rounded-lg text-slate-200 overflow-x-auto whitespace-pre-wrap max-h-52">[[ serverOpsResult.output ]]</pre>
+            <pre v-if="serverOpsResult.content_preview" class="p-2.5 bg-slate-950 rounded-lg text-sky-200 overflow-x-auto whitespace-pre-wrap max-h-52">[[ serverOpsResult.content_preview ]]</pre>
+          </div>
+        </div>
+
+        <div class="px-6 py-3.5 border-t border-slate-800 bg-slate-900 flex items-center justify-end gap-2">
+          <button
+            @click="serverOpsModalVisible = false"
+            class="px-4 py-1.5 text-xs text-slate-400 hover:text-white rounded-lg transition">
+            关闭
+          </button>
+          <button
+            @click="runServerOps"
+            :disabled="runningServerOps || !serverOpsForm.server_id.trim()"
+            class="px-4 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow transition disabled:opacity-50 flex items-center gap-1.5">
+            <i :class="runningServerOps ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-play'"></i>
+            <span>[[ runningServerOps ? '正在免密执行...' : '立即执行' ]]</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <script>
@@ -5554,6 +6154,303 @@
             showToast('error', '请求失败', e.message);
           } finally {
             actionSubmitting.value = false;
+          }
+        };
+
+        // ------------------------------------------------------------------
+        // 服务器凭据管控 (Server Vault & Agent Zero-Exposure Execution)
+        // ------------------------------------------------------------------
+        const serverStats = ref({
+          total_servers: 5,
+          active_servers: 5,
+          online_servers: 5,
+          unreachable_servers: 0,
+          total_logs: 3,
+          projects_distribution: [],
+          environments_distribution: []
+        });
+        const filterServerProject = ref('');
+        const filterServerEnv = ref('');
+        const serverModalVisible = ref(false);
+        const isEditingServer = ref(false);
+        const savingServer = ref(false);
+        const showPasswordInput = ref(false);
+        const testingServerId = ref('');
+        const serverForm = ref({
+          server_id: '',
+          name: '',
+          project_name: 'tpm-backend-app',
+          environment: 'prod',
+          host: '',
+          port: 22,
+          username: 'root',
+          auth_type: 'password',
+          password: '',
+          private_key: '',
+          default_workdir: '/opt/tpm',
+          tags_text: 'spring-boot, prod',
+          description: '',
+          status: 'active'
+        });
+
+        const serverOpsModalVisible = ref(false);
+        const runningServerOps = ref(false);
+        const serverOpsResult = ref(null);
+        const serverOpsForm = ref({
+          server_id: 'SRV-TPM-APP-PROD-01',
+          mode: 'exec',
+          workdir: '',
+          command: 'uname -a && ls -la',
+          local_path: '',
+          remote_path: '/opt/tpm/app.jar',
+          content_text: '',
+          recursive: false
+        });
+
+        const fetchServerStats = async () => {
+          try {
+            const resp = await fetch('/api/v1/servers/stats', { headers: getAuthHeaders() });
+            if (resp.ok) {
+              serverStats.value = await resp.json();
+            }
+          } catch (e) {
+            console.error('fetchServerStats error:', e);
+          }
+        };
+
+        const clearServerFilters = () => {
+          searchKeyword.value = '';
+          filterServerProject.value = '';
+          filterServerEnv.value = '';
+          pagination.value.page = 1;
+          loadData();
+        };
+
+        const openServerModal = (row = null) => {
+          showPasswordInput.value = false;
+          if (row && row.server_id) {
+            isEditingServer.value = true;
+            serverForm.value = {
+              server_id: row.server_id,
+              name: row.name || '',
+              project_name: row.project_name || 'tpm-backend-app',
+              environment: row.environment || 'prod',
+              host: row.host || '',
+              port: row.port || 22,
+              username: row.username || 'root',
+              auth_type: row.auth_type || 'password',
+              password: '',
+              private_key: '',
+              default_workdir: row.default_workdir || '/opt/app',
+              tags_text: Array.isArray(row.tags) ? row.tags.join(', ') : '',
+              description: row.description || '',
+              status: row.status || 'active'
+            };
+          } else {
+            isEditingServer.value = false;
+            serverForm.value = {
+              server_id: 'SRV-TPM-' + Math.floor(100 + Math.random() * 900),
+              name: '',
+              project_name: filterServerProject.value || 'tpm-backend-app',
+              environment: filterServerEnv.value || 'prod',
+              host: '',
+              port: 22,
+              username: 'root',
+              auth_type: 'password',
+              password: '',
+              private_key: '',
+              default_workdir: '/opt/tpm',
+              tags_text: 'linux, ssh',
+              description: '',
+              status: 'active'
+            };
+          }
+          serverModalVisible.value = true;
+        };
+
+        const submitServerForm = async () => {
+          savingServer.value = true;
+          try {
+            const tagsArr = (serverForm.value.tags_text || '')
+              .split(',')
+              .map(s => s.trim())
+              .filter(Boolean);
+            const payload = {
+              server_id: serverForm.value.server_id.trim(),
+              name: serverForm.value.name.trim(),
+              project_name: serverForm.value.project_name.trim() || 'tpm-backend-app',
+              environment: serverForm.value.environment,
+              host: serverForm.value.host.trim(),
+              port: Number(serverForm.value.port) || 22,
+              username: serverForm.value.username.trim() || 'root',
+              auth_type: serverForm.value.auth_type,
+              default_workdir: serverForm.value.default_workdir.trim() || '/opt/app',
+              tags: tagsArr,
+              description: serverForm.value.description.trim(),
+              status: serverForm.value.status
+            };
+            if (serverForm.value.password && serverForm.value.password.trim()) {
+              payload.password = serverForm.value.password;
+            }
+            if (serverForm.value.private_key && serverForm.value.private_key.trim()) {
+              payload.private_key = serverForm.value.private_key;
+            }
+
+            const url = isEditingServer.value
+              ? `/api/v1/servers/${encodeURIComponent(payload.server_id)}`
+              : '/api/v1/servers';
+            const method = isEditingServer.value ? 'PUT' : 'POST';
+
+            const resp = await fetch(url, {
+              method,
+              headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(payload)
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+              showToast('success', '凭据加密保存成功', data.message || '服务器登录信息已安全入库');
+              serverModalVisible.value = false;
+              await fetchServerStats();
+              await fetchStats();
+              loadData();
+            } else {
+              showToast('error', '保存失败', data.detail || data.message || '请检查输入项');
+            }
+          } catch (e) {
+            showToast('error', '请求异常', e.message);
+          } finally {
+            savingServer.value = false;
+          }
+        };
+
+        const deleteServerRow = async (row) => {
+          if (!row || !row.server_id) return;
+          if (!window.confirm(`确定要删除服务器凭据【${row.server_id} (${row.host})】吗？`)) return;
+          try {
+            const resp = await fetch(`/api/v1/servers/${encodeURIComponent(row.server_id)}`, {
+              method: 'DELETE',
+              headers: getAuthHeaders()
+            });
+            if (resp.ok) {
+              showToast('success', '已删除', `服务器凭据 ${row.server_id} 已移除`);
+              await fetchServerStats();
+              await fetchStats();
+              loadData();
+            } else {
+              const err = await resp.json();
+              showToast('error', '删除失败', err.detail || '删除操作失败');
+            }
+          } catch (e) {
+            showToast('error', '删除异常', e.message);
+          }
+        };
+
+        const testServerConn = async (row) => {
+          if (!row || !row.server_id) return;
+          testingServerId.value = row.server_id;
+          try {
+            const resp = await fetch(`/api/v1/servers/${encodeURIComponent(row.server_id)}/test-connection`, {
+              method: 'POST',
+              headers: getAuthHeaders()
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+              showToast(
+                data.success ? 'success' : 'warning',
+                data.success ? `连通正常 (${row.server_id})` : `连接异常 (${row.server_id})`,
+                data.message || ''
+              );
+              await fetchServerStats();
+              loadData();
+            } else {
+              showToast('error', '探测失败', data.detail || '请求失败');
+            }
+          } catch (e) {
+            showToast('error', '探测异常', e.message);
+          } finally {
+            testingServerId.value = '';
+          }
+        };
+
+        const openServerOpsModal = (row = null) => {
+          serverOpsResult.value = null;
+          if (row && row.server_id) {
+            serverOpsForm.value.server_id = row.server_id;
+            serverOpsForm.value.workdir = row.default_workdir || '/opt/app';
+            serverOpsForm.value.remote_path = (row.default_workdir || '/opt/app') + '/app.jar';
+          }
+          serverOpsModalVisible.value = true;
+        };
+
+        const runServerOps = async () => {
+          const sid = (serverOpsForm.value.server_id || '').trim();
+          if (!sid) return;
+          runningServerOps.value = true;
+          serverOpsResult.value = null;
+          try {
+            let endpoint = `/api/v1/servers/${encodeURIComponent(sid)}/exec`;
+            let body = {};
+            if (serverOpsForm.value.mode === 'exec') {
+              body = {
+                command: serverOpsForm.value.command,
+                workdir: serverOpsForm.value.workdir || null,
+                operator: 'Dashboard-Agent'
+              };
+            } else if (serverOpsForm.value.mode === 'upload') {
+              endpoint = `/api/v1/servers/${encodeURIComponent(sid)}/upload`;
+              body = {
+                local_path: serverOpsForm.value.local_path || null,
+                remote_path: serverOpsForm.value.remote_path,
+                content_text: serverOpsForm.value.content_text || null,
+                recursive: serverOpsForm.value.recursive,
+                operator: 'Dashboard-Agent'
+              };
+            } else {
+              endpoint = `/api/v1/servers/${encodeURIComponent(sid)}/download`;
+              body = {
+                remote_path: serverOpsForm.value.remote_path,
+                local_path: serverOpsForm.value.local_path || null,
+                recursive: serverOpsForm.value.recursive,
+                return_content: true,
+                operator: 'Dashboard-Agent'
+              };
+            }
+
+            const resp = await fetch(endpoint, {
+              method: 'POST',
+              headers: {
+                ...getAuthHeaders(),
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(body)
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+              serverOpsResult.value = data;
+              await fetchServerStats();
+              if (currentSubTab.value.endpoint === '/api/v1/servers/logs') {
+                loadData();
+              }
+            } else {
+              serverOpsResult.value = {
+                success: false,
+                exit_code: resp.status,
+                duration_sec: 0,
+                output: data.detail || data.message || '执行请求失败'
+              };
+            }
+          } catch (e) {
+            serverOpsResult.value = {
+              success: false,
+              exit_code: -1,
+              duration_sec: 0,
+              output: e.message
+            };
+          } finally {
+            runningServerOps.value = false;
           }
         };
 
@@ -7361,6 +8258,56 @@
                 ]
               }
             ]
+          },
+
+          // 15. 服务器凭据管控 (Server Vault & Agent Zero-Exposure Execution)
+          {
+            id: 'servers',
+            label: '服务器凭据管控',
+            icon: 'fa-solid fa-server',
+            statKey: 'servers_total',
+            subTabs: [
+              {
+                name: '服务器凭据库',
+                endpoint: '/api/v1/servers',
+                searchPlaceholder: '搜索服务器标识(SRV-ID)、名称、所属项目、IP地址、账号...',
+                columns: [
+                  { key: 'server_id', label: '服务器标识 (server_id)', cellClass: 'font-mono font-bold text-indigo-400 whitespace-nowrap' },
+                  { key: 'name', label: '服务器名称', cellClass: 'font-semibold text-white whitespace-nowrap' },
+                  { key: 'project_name', label: '所属项目', cellClass: 'font-mono text-indigo-300 whitespace-nowrap' },
+                  { key: 'environment', label: '运行环境', type: 'badge' },
+                  { key: 'host', label: '服务器 IP / 域名', cellClass: 'font-mono text-emerald-400 font-bold whitespace-nowrap' },
+                  { key: 'port', label: 'SSH端口', cellClass: 'font-mono text-amber-400 whitespace-nowrap' },
+                  { key: 'username', label: '登录账号', cellClass: 'font-mono text-slate-200 whitespace-nowrap' },
+                  { key: 'password_masked', label: '登录密码 (防泄露掩码)', cellClass: 'font-mono text-rose-400 tracking-widest whitespace-nowrap' },
+                  { key: 'auth_type', label: '认证方式', type: 'badge' },
+                  { key: 'default_workdir', label: '默认工作目录', cellClass: 'font-mono text-xs text-slate-300 whitespace-nowrap' },
+                  { key: 'last_check_status', label: '连通状态', type: 'badge' },
+                  { key: 'last_check_message', label: '最近探测反馈', truncate: true, cellClass: 'text-xs text-slate-400' },
+                  { key: 'description', label: '用途与Agent指引', truncate: true, cellClass: 'text-xs text-slate-300' },
+                  { key: 'status', label: '启用状态', type: 'badge' }
+                ]
+              },
+              {
+                name: 'Agent 调用与访问审计',
+                endpoint: '/api/v1/servers/logs',
+                searchPlaceholder: '搜索服务器标识、IP、调用方、执行命令或上传下载路径...',
+                columns: [
+                  { key: 'id', label: '审计ID', cellClass: 'font-mono text-slate-400' },
+                  { key: 'server_id', label: '服务器标识', cellClass: 'font-mono font-bold text-indigo-400' },
+                  { key: 'project_name', label: '所属项目', cellClass: 'font-mono text-indigo-300' },
+                  { key: 'host', label: '目标IP', cellClass: 'font-mono text-emerald-400' },
+                  { key: 'action_type', label: '动作类型', type: 'badge' },
+                  { key: 'operator', label: '调用方', cellClass: 'font-mono text-sky-300' },
+                  { key: 'command_or_path', label: '执行命令 / 传输路径', truncate: true, cellClass: 'font-mono text-xs text-amber-200' },
+                  { key: 'status', label: '结果', type: 'badge' },
+                  { key: 'exit_code', label: '退出码', cellClass: 'font-mono text-slate-300' },
+                  { key: 'output_summary', label: '脱敏输出摘要', truncate: true, cellClass: 'font-mono text-xs text-slate-400' },
+                  { key: 'duration_sec', label: '耗时(秒)', cellClass: 'font-mono text-indigo-400' },
+                  { key: 'created_at', label: '发生时间', cellClass: 'font-mono text-slate-400' }
+                ]
+              }
+            ]
           }
         ];
 
@@ -7403,7 +8350,8 @@
               qcc_bids_total: data.qcc_bids?.total_bids || 0,
               frontier_tech_total: data.frontier_tech?.total_posts || 0,
               frontier_tech_translated: data.frontier_tech?.translated_posts || 0,
-              contracts_total: data.contracts?.total_contracts || 0
+              contracts_total: data.contracts?.total_contracts || 0,
+              servers_total: data.servers?.total_servers || 0
             };
           } catch (err) {
             console.error('Failed fetching stats:', err);
@@ -7499,6 +8447,16 @@
               }
             }
 
+            // 针对服务器凭据管控专属筛选
+            if (currentMenuId.value === 'servers') {
+              if (filterServerProject.value) {
+                url.searchParams.set('project_name', filterServerProject.value);
+              }
+              if (filterServerEnv.value && currentSubTab.value.endpoint === '/api/v1/servers') {
+                url.searchParams.set('environment', filterServerEnv.value);
+              }
+            }
+
             const resp = await fetch(url.toString(), {
               headers: getAuthHeaders()
             });
@@ -7544,6 +8502,8 @@
               fetchContractStats();
               fetchArbitrationStats();
             });
+          } else if (menuId === 'servers') {
+            fetchServerStats();
           }
         };
 
@@ -10318,7 +11278,27 @@
           publicity_count: '公示记录数',
           success_count: '成功入库条数',
           duration_sec: '任务耗时(秒)',
-          started_at: '任务启动时间'
+          started_at: '任务启动时间',
+          server_id: '服务器标识 (server_id)',
+          environment: '运行环境',
+          host: '服务器 IP / 域名',
+          port: 'SSH端口',
+          username: '登录账号',
+          password_masked: '登录密码 (掩码保护)',
+          auth_type: '认证方式',
+          has_password: '已存加密密码',
+          has_private_key: '已存加密私钥',
+          default_workdir: '默认远程工作目录',
+          last_check_status: '最近连通状态',
+          last_check_message: '最近连通探测信息',
+          last_check_at: '最近探测时间',
+          agent_usage: 'Agent 免密调用示例',
+          recent_logs: '最近审计记录',
+          action_type: '操作类型',
+          operator: '调用方',
+          command_or_path: '执行命令 / 传输路径',
+          exit_code: '退出状态码',
+          output_summary: '脱敏输出摘要'
         };
 
         const formatFieldLabel = (key) => {
@@ -10416,7 +11396,20 @@
           pending_review: '待架构师复核',
           critical: 'CRITICAL (严重)',
           high: 'HIGH (高危)',
-          medium: 'MEDIUM (中危)'
+          medium: 'MEDIUM (中危)',
+          prod: '生产环境 (PROD)',
+          staging: '预发环境 (STAGING)',
+          dev: '开发环境 (DEV)',
+          password: '账号密码',
+          ssh_key: 'SSH密钥',
+          unreachable: '不可达',
+          auth_failed: '认证失败',
+          unknown: '待探测',
+          exec_cmd: '免密执行命令',
+          upload_file: '免密上传文件',
+          download_file: '免密下载文件',
+          test_conn: '连通性探测',
+          credential_update: '凭据加密维护'
         };
 
         // 认领执行者映射表
@@ -10888,7 +11881,28 @@
           actionReason,
           actionSubmitting,
           openTakeActionModal,
-          submitArbitrationAction
+          submitArbitrationAction,
+          serverStats,
+          filterServerProject,
+          filterServerEnv,
+          serverModalVisible,
+          isEditingServer,
+          savingServer,
+          showPasswordInput,
+          serverForm,
+          testingServerId,
+          serverOpsModalVisible,
+          runningServerOps,
+          serverOpsResult,
+          serverOpsForm,
+          fetchServerStats,
+          clearServerFilters,
+          openServerModal,
+          submitServerForm,
+          deleteServerRow,
+          testServerConn,
+          openServerOpsModal,
+          runServerOps
         };
       }
     }).mount('#app');

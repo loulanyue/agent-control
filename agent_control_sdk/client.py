@@ -199,6 +199,108 @@ class _SystemEndpoint:
         return SystemMetrics.from_dict(res)
 
 
+class _ServersEndpoint:
+    """
+    Server Credentials & Agent Zero-Exposure Execution SDK Endpoint.
+    Allows Agents to list servers, run remote commands, and upload/download files by server_id
+    without ever handling raw passwords.
+    """
+    def __init__(self, client: "AgentControlClient"):
+        self._c = client
+
+    def list(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        project_name: Optional[str] = None,
+        environment: Optional[str] = None,
+        keyword: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {"page": page, "page_size": page_size}
+        if project_name:
+            params["project_name"] = project_name
+        if environment:
+            params["environment"] = environment
+        if keyword:
+            params["keyword"] = keyword
+        return self._c._get("/api/v1/servers", params=params)
+
+    def get(self, server_id: str) -> Dict[str, Any]:
+        return self._c._get(f"/api/v1/servers/{server_id}")
+
+    def test_connection(self, server_id: str, verify_ssh_auth: bool = False) -> Dict[str, Any]:
+        return self._c._post(
+            f"/api/v1/servers/{server_id}/test-connection?verify_ssh_auth={'true' if verify_ssh_auth else 'false'}",
+            data={},
+        )
+
+    def exec(
+        self,
+        server_id: str,
+        command: str,
+        workdir: Optional[str] = None,
+        timeout: int = 60,
+        operator: str = "SDK-Agent",
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "command": command,
+            "timeout": timeout,
+            "operator": operator,
+        }
+        if workdir is not None:
+            payload["workdir"] = workdir
+        return self._c._post(f"/api/v1/servers/{server_id}/exec", data=payload)
+
+    def upload(
+        self,
+        server_id: str,
+        remote_path: str,
+        local_path: Optional[str] = None,
+        content_text: Optional[str] = None,
+        content_base64: Optional[str] = None,
+        filename: Optional[str] = None,
+        recursive: bool = False,
+        timeout: int = 120,
+        operator: str = "SDK-Agent",
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "remote_path": remote_path,
+            "recursive": recursive,
+            "timeout": timeout,
+            "operator": operator,
+        }
+        if local_path is not None:
+            payload["local_path"] = local_path
+        if content_text is not None:
+            payload["content_text"] = content_text
+        if content_base64 is not None:
+            payload["content_base64"] = content_base64
+        if filename is not None:
+            payload["filename"] = filename
+        return self._c._post(f"/api/v1/servers/{server_id}/upload", data=payload)
+
+    def download(
+        self,
+        server_id: str,
+        remote_path: str,
+        local_path: Optional[str] = None,
+        recursive: bool = False,
+        return_content: bool = False,
+        timeout: int = 120,
+        operator: str = "SDK-Agent",
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "remote_path": remote_path,
+            "recursive": recursive,
+            "return_content": return_content,
+            "timeout": timeout,
+            "operator": operator,
+        }
+        if local_path is not None:
+            payload["local_path"] = local_path
+        return self._c._post(f"/api/v1/servers/{server_id}/download", data=payload)
+
+
 class AgentControlClient:
     """
     Main entry point for Agent Control Python SDK.
@@ -207,6 +309,7 @@ class AgentControlClient:
         client = AgentControlClient(base_url="http://localhost:8000")
         agents = client.agents.list()
         task = client.tasks.dispatch(title="Collect Competitor Intelligence")
+        srv_res = client.servers.exec("SRV-TPM-APP-PROD-01", "ps -ef | grep java")
         metrics = client.system.metrics()
     """
 
@@ -226,6 +329,7 @@ class AgentControlClient:
         self.tasks = _TasksEndpoint(self)
         self.graphs = _GraphsEndpoint(self)
         self.system = _SystemEndpoint(self)
+        self.servers = _ServersEndpoint(self)
 
     def _headers(self) -> Dict[str, str]:
         headers = {

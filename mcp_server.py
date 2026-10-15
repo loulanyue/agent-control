@@ -2,7 +2,7 @@
 """
 Agent Control MCP Server (Stdio JSON-RPC 2.0 / Model Context Protocol)
 Exposes tools for Agent Control Plane orchestration, DAG inspection, task dispatching,
-and database inspection.
+server credential vault execution (SSH/SCP without exposing passwords), and database inspection.
 
 Tools:
   - control_list_agents: List all registered AI agents with status, capabilities, and last heartbeat.
@@ -11,20 +11,35 @@ Tools:
   - control_get_task_status: Get detailed task execution status, attempts, and artifacts.
   - control_list_graphs: List DAG workflows and orchestration pipelines.
   - control_get_system_metrics: Retrieve cluster metrics (agents, active tasks, DAG runs, DB status).
-  - mysql_read_query: Execute SELECT/SHOW/DESCRIBE queries against the agent_control database.
-  - mysql_list_tables: List all 40 tables available in the agent_control database.
+  - control_list_servers: List managed project servers (server_id, project, host, port, username, workdir; password masked).
+  - control_exec_server_command: Execute a remote shell command on a server by server_id without exposing credentials.
+  - control_upload_server_file: Upload a local file/directory to a remote server by server_id without exposing credentials.
+  - control_download_server_file: Download a remote file/directory from a server by server_id without exposing credentials.
+  - mysql_read_query: Execute SELECT/SHOW/DESCRIBE queries against the agent_control database (vault ciphertexts masked).
+  - mysql_list_tables: List all tables available in the agent_control database.
   - mysql_describe_table: Inspect schema definitions of any table.
   - mysql_execute_statement: Execute INSERT/UPDATE/DELETE DML statements.
 """
 
 import sys
 import os
+import glob
 import json
 import time
 import decimal
 import datetime
 import traceback
+
+# Ensure local venv site-packages and project root are on sys.path
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+for _sp in glob.glob(os.path.join(_BASE_DIR, "venv", "lib", "python*", "site-packages")):
+    if _sp not in sys.path and os.path.isdir(_sp):
+        sys.path.insert(0, _sp)
+if _BASE_DIR not in sys.path:
+    sys.path.insert(0, _BASE_DIR)
+
 import pymysql
+from app.core.vault import execute_remote_command, transfer_remote_file
 
 # Database connection config
 DB_HOST = os.getenv("MYSQL_HOST") or os.getenv("DB_HOST", "127.0.0.1")
@@ -58,6 +73,18 @@ def generate_public_id(prefix: str) -> str:
     timestamp_ms = int(time.time() * 1000)
     rand_hex = os.urandom(3).hex().upper()
     return f"{prefix}_{timestamp_ms}_{rand_hex}"
+
+def _lookup_server_row(cursor, server_id_or_host: str):
+    ref = (server_id_or_host or "").strip()
+    cursor.execute(
+        "SELECT * FROM server_credentials WHERE server_id = %s OR host = %s LIMIT 1",
+        (ref, ref)
+    )
+    row = cursor.fetchone()
+    if not row and ref.isdigit():
+        cursor.execute("SELECT * FROM server_credentials WHERE id = %s LIMIT 1", (int(ref),))
+        row = cursor.fetchone()
+    return row
 
 TOOLS = [
     {
@@ -165,6 +192,118 @@ TOOLS = [
         }
     },
     {
+        "name": "control_list_servers",
+        "description": "List managed project servers in the Server Vault (returns server_id, name, project_name, environment, host, port, username, default_workdir, description; passwords are never exposed).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_name": {
+                    "type": "string",
+                    "description": "Optional filter by project name (e.g., 'tpm-backend-app', 'tpm-frontend-web')"
+                },
+                "environment": {
+                    "type": "string",
+                    "description": "Optional filter by environment ('prod', 'staging', 'test', 'dev')"
+                },
+                "keyword": {
+                    "type": "string",
+                    "description": "Optional keyword matching server_id, name, host, or description"
+                }
+            }
+        }
+    },
+    {
+        "name": "control_exec_server_command",
+        "description": "Execute a shell command on a remote server using its server_id (or host IP) via the encrypted Server Vault without exposing the password.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "server_id": {
+                    "type": "string",
+                    "description": "The server_id (e.g., 'SRV-TPM-APP-PROD-01') or IP address of the target server"
+                },
+                "command": {
+                    "type": "string",
+                    "description": "The shell command to execute on the remote server"
+                },
+                "workdir": {
+                    "type": "string",
+                    "description": "Optional working directory on the remote server (defaults to server's default_workdir)"
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": "Execution timeout in seconds (default 60)",
+                    "default": 60
+                }
+            },
+            "required": ["server_id", "command"]
+        }
+    },
+    {
+        "name": "control_upload_server_file",
+        "description": "Upload a local file or directory to a remote server by server_id via SCP using the encrypted Server Vault without exposing the password.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "server_id": {
+                    "type": "string",
+                    "description": "The server_id (e.g., 'SRV-TPM-APP-PROD-01') or IP address of the target server"
+                },
+                "local_path": {
+                    "type": "string",
+                    "description": "Absolute or relative local file/directory path on the host machine"
+                },
+                "remote_path": {
+                    "type": "string",
+                    "description": "Target path on the remote server (e.g., '/opt/tpm/app.jar')"
+                },
+                "recursive": {
+                    "type": "boolean",
+                    "description": "Set to true when uploading a directory recursively",
+                    "default": False
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": "Transfer timeout in seconds (default 120)",
+                    "default": 120
+                }
+            },
+            "required": ["server_id", "local_path", "remote_path"]
+        }
+    },
+    {
+        "name": "control_download_server_file",
+        "description": "Download a file or directory from a remote server to a local path by server_id via SCP using the encrypted Server Vault without exposing the password.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "server_id": {
+                    "type": "string",
+                    "description": "The server_id (e.g., 'SRV-TPM-APP-PROD-01') or IP address of the target server"
+                },
+                "remote_path": {
+                    "type": "string",
+                    "description": "Source file/directory path on the remote server"
+                },
+                "local_path": {
+                    "type": "string",
+                    "description": "Destination path on the local host machine"
+                },
+                "recursive": {
+                    "type": "boolean",
+                    "description": "Set to true when downloading a directory recursively",
+                    "default": False
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": "Transfer timeout in seconds (default 120)",
+                    "default": 120
+                }
+            },
+            "required": ["server_id", "remote_path", "local_path"]
+        }
+    },
+    {
         "name": "mysql_read_query",
         "description": "Execute a SELECT / SHOW / DESC query against the agent_control MySQL database.",
         "inputSchema": {
@@ -180,7 +319,7 @@ TOOLS = [
     },
     {
         "name": "mysql_list_tables",
-        "description": "List all 40 tables available in the agent_control MySQL database.",
+        "description": "List all tables available in the agent_control MySQL database.",
         "inputSchema": {
             "type": "object",
             "properties": {}
@@ -338,6 +477,209 @@ def handle_call_tool(params):
                 }
                 return {"content": [{"type": "text", "text": json.dumps(metrics, ensure_ascii=False, indent=2)}]}
 
+            # 6.1 control_list_servers
+            elif name == "control_list_servers":
+                project_name = arguments.get("project_name")
+                environment = arguments.get("environment")
+                keyword = arguments.get("keyword")
+                sql = """
+                    SELECT id, server_id, name, project_name, environment, host, port,
+                           username, auth_type, default_workdir, tags, description,
+                           status, last_check_status, last_check_message, last_check_at
+                    FROM server_credentials
+                """
+                conds = []
+                args = []
+                if project_name:
+                    conds.append("project_name = %s")
+                    args.append(project_name)
+                if environment:
+                    conds.append("environment = %s")
+                    args.append(environment)
+                if keyword:
+                    kw = f"%{keyword}%"
+                    conds.append("(server_id LIKE %s OR name LIKE %s OR host LIKE %s OR description LIKE %s)")
+                    args.extend([kw, kw, kw, kw])
+                if conds:
+                    sql += " WHERE " + " AND ".join(conds)
+                sql += " ORDER BY id DESC"
+                cursor.execute(sql, args)
+                rows = cursor.fetchall()
+                for r in rows:
+                    r["password_masked"] = "********"
+                return {
+                    "content": [{
+                        "type": "text",
+                        "text": json.dumps({"total": len(rows), "servers": rows}, default=json_serial, ensure_ascii=False, indent=2)
+                    }]
+                }
+
+            # 6.2 control_exec_server_command
+            elif name == "control_exec_server_command":
+                server_ref = arguments.get("server_id", "")
+                command = arguments.get("command", "")
+                workdir = arguments.get("workdir")
+                timeout = int(arguments.get("timeout", 60))
+
+                srv = _lookup_server_row(cursor, server_ref)
+                if not srv:
+                    return {"isError": True, "content": [{"type": "text", "text": f"Server credential not found: {server_ref}"}]}
+                if srv.get("status") != "active":
+                    return {"isError": True, "content": [{"type": "text", "text": f"Server {srv['server_id']} is disabled."}]}
+
+                effective_wd = workdir if workdir is not None else srv.get("default_workdir")
+                res = execute_remote_command(
+                    host=srv["host"],
+                    port=int(srv.get("port") or 22),
+                    username=srv["username"],
+                    command=command,
+                    password_cipher=srv.get("password_cipher"),
+                    private_key_cipher=srv.get("private_key_cipher"),
+                    workdir=effective_wd,
+                    timeout=timeout
+                )
+                cursor.execute(
+                    """
+                    INSERT INTO server_access_logs
+                    (server_id, project_name, host, action_type, operator, command_or_path, exit_code, status, output_summary, duration_sec, created_at)
+                    VALUES (%s, %s, %s, 'exec_cmd', 'MCP-Agent', %s, %s, %s, %s, %s, NOW())
+                    """,
+                    (
+                        srv["server_id"],
+                        srv["project_name"],
+                        srv["host"],
+                        f"[{effective_wd or '~'}] $ {command}",
+                        res["exit_code"],
+                        "SUCCESS" if res["success"] else "FAILED",
+                        (res["output"] or "")[:2000],
+                        res["duration_sec"]
+                    )
+                )
+                return {
+                    "isError": not res["success"],
+                    "content": [{
+                        "type": "text",
+                        "text": json.dumps({
+                            "server_id": srv["server_id"],
+                            "host": srv["host"],
+                            "workdir": effective_wd,
+                            **res
+                        }, ensure_ascii=False, indent=2)
+                    }]
+                }
+
+            # 6.3 control_upload_server_file
+            elif name == "control_upload_server_file":
+                server_ref = arguments.get("server_id", "")
+                local_path = arguments.get("local_path", "")
+                remote_path = arguments.get("remote_path", "")
+                recursive = bool(arguments.get("recursive", False))
+                timeout = int(arguments.get("timeout", 120))
+
+                srv = _lookup_server_row(cursor, server_ref)
+                if not srv:
+                    return {"isError": True, "content": [{"type": "text", "text": f"Server credential not found: {server_ref}"}]}
+                if not os.path.exists(local_path):
+                    return {"isError": True, "content": [{"type": "text", "text": f"Local path does not exist: {local_path}"}]}
+
+                res = transfer_remote_file(
+                    direction="upload",
+                    host=srv["host"],
+                    port=int(srv.get("port") or 22),
+                    username=srv["username"],
+                    local_path=local_path,
+                    remote_path=remote_path,
+                    password_cipher=srv.get("password_cipher"),
+                    private_key_cipher=srv.get("private_key_cipher"),
+                    recursive=recursive,
+                    timeout=timeout
+                )
+                cursor.execute(
+                    """
+                    INSERT INTO server_access_logs
+                    (server_id, project_name, host, action_type, operator, command_or_path, exit_code, status, output_summary, duration_sec, created_at)
+                    VALUES (%s, %s, %s, 'upload_file', 'MCP-Agent', %s, %s, %s, %s, %s, NOW())
+                    """,
+                    (
+                        srv["server_id"],
+                        srv["project_name"],
+                        srv["host"],
+                        f"UPLOAD {local_path} -> {remote_path}",
+                        res["exit_code"],
+                        "SUCCESS" if res["success"] else "FAILED",
+                        (res["output"] or "Upload completed")[:2000],
+                        res["duration_sec"]
+                    )
+                )
+                return {
+                    "isError": not res["success"],
+                    "content": [{
+                        "type": "text",
+                        "text": json.dumps({
+                            "server_id": srv["server_id"],
+                            "host": srv["host"],
+                            **res
+                        }, ensure_ascii=False, indent=2)
+                    }]
+                }
+
+            # 6.4 control_download_server_file
+            elif name == "control_download_server_file":
+                server_ref = arguments.get("server_id", "")
+                remote_path = arguments.get("remote_path", "")
+                local_path = arguments.get("local_path", "")
+                recursive = bool(arguments.get("recursive", False))
+                timeout = int(arguments.get("timeout", 120))
+
+                srv = _lookup_server_row(cursor, server_ref)
+                if not srv:
+                    return {"isError": True, "content": [{"type": "text", "text": f"Server credential not found: {server_ref}"}]}
+
+                parent_dir = os.path.dirname(os.path.abspath(local_path))
+                if parent_dir and not os.path.exists(parent_dir):
+                    os.makedirs(parent_dir, exist_ok=True)
+
+                res = transfer_remote_file(
+                    direction="download",
+                    host=srv["host"],
+                    port=int(srv.get("port") or 22),
+                    username=srv["username"],
+                    local_path=local_path,
+                    remote_path=remote_path,
+                    password_cipher=srv.get("password_cipher"),
+                    private_key_cipher=srv.get("private_key_cipher"),
+                    recursive=recursive,
+                    timeout=timeout
+                )
+                cursor.execute(
+                    """
+                    INSERT INTO server_access_logs
+                    (server_id, project_name, host, action_type, operator, command_or_path, exit_code, status, output_summary, duration_sec, created_at)
+                    VALUES (%s, %s, %s, 'download_file', 'MCP-Agent', %s, %s, %s, %s, %s, NOW())
+                    """,
+                    (
+                        srv["server_id"],
+                        srv["project_name"],
+                        srv["host"],
+                        f"DOWNLOAD {remote_path} -> {local_path}",
+                        res["exit_code"],
+                        "SUCCESS" if res["success"] else "FAILED",
+                        (res["output"] or "Download completed")[:2000],
+                        res["duration_sec"]
+                    )
+                )
+                return {
+                    "isError": not res["success"],
+                    "content": [{
+                        "type": "text",
+                        "text": json.dumps({
+                            "server_id": srv["server_id"],
+                            "host": srv["host"],
+                            **res
+                        }, ensure_ascii=False, indent=2)
+                    }]
+                }
+
             # 7. mysql_read_query
             elif name == "mysql_read_query":
                 query = arguments.get("query", "").strip()
@@ -348,6 +690,12 @@ def handle_call_tool(params):
                     }
                 cursor.execute(query)
                 rows = cursor.fetchall()
+                # 安全防护：屏蔽凭据表中的密文字段，防止密文进入 Agent 上下文
+                for r in rows:
+                    if isinstance(r, dict):
+                        for secret_col in ("password_cipher", "private_key_cipher", "token_hash"):
+                            if secret_col in r and r[secret_col]:
+                                r[secret_col] = "[REDACTED_VAULT_SECRET]"
                 result_text = json.dumps(rows, default=json_serial, ensure_ascii=False, indent=2)
                 return {
                     "content": [{"type": "text", "text": result_text}]
@@ -419,7 +767,7 @@ def main():
                     },
                     "serverInfo": {
                         "name": "agent-control-mcp",
-                        "version": "1.1.0"
+                        "version": "1.2.0"
                     }
                 }
             }

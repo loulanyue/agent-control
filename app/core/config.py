@@ -28,6 +28,7 @@ class Settings:
 
     # 安全与身份认证 (CWE-306 防御)
     API_KEY: str = os.getenv("API_KEY") or os.getenv("AGENT_CONTROL_API_KEY") or ""
+    SERVER_VAULT_SECRET_KEY: str = os.getenv("SERVER_VAULT_SECRET_KEY") or ""
     REQUIRE_AUTH: bool = os.getenv("REQUIRE_AUTH", "true").lower() == "true"
     CORS_ORIGINS: list[str] = [
         origin.strip()
