@@ -97,7 +97,7 @@ start_daemon() {
 
     check_port_conflict
     echo -e "${GREEN}▶ 正在启动后台守护进程...${NC}"
-    nohup "${UVICORN_BIN}" main:app --host "${HOST}" --port "${PORT}" >> "${LOG_FILE}" 2>&1 &
+    nohup "${UVICORN_BIN}" main:app --host "${HOST}" --port "${PORT}" --reload >> "${LOG_FILE}" 2>&1 &
     local new_pid=$!
     echo "${new_pid}" > "${PID_FILE}"
     sleep 1.5
