@@ -26,7 +26,9 @@ ${PYTHON_BIN} .agents/skills/hz-talent-crawler/scripts/crawler.py --days 3 --per
 EXIT_CODE=$?
 
 if [ ${EXIT_CODE} -eq 0 ]; then
-    echo "[$(date +'%Y-%m-%d %H:%M:%S')] Scheduled talent crawl completed successfully." >> "${LOG_FILE}"
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] Scheduled talent crawl completed successfully. Running deduplication..." >> "${LOG_FILE}"
+    ${PYTHON_BIN} "${PROJECT_ROOT}/agent-control/scripts/deduplicate_talent_notices.py" >> "${LOG_FILE}" 2>&1
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] Deduplication completed." >> "${LOG_FILE}"
 else
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] Scheduled talent crawl failed with exit code ${EXIT_CODE}." >> "${LOG_FILE}"
 fi
